@@ -1,0 +1,29 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - versao original, sem filtros
+//
+// Fora da posicao: compra limitada na MINIMA dos 2 ultimos candles
+// Comprado:        venda limitada na MAXIMA dos 2 ultimos candles
+// Sem stop: a saida e sempre a maxima dos 2 ultimos candles.
+//
+// O codigo roda no fechamento de cada candle e a ordem vale so
+// para o candle seguinte; se nao executar, e recalculada no
+// proximo fechamento - por isso ela "acompanha" a minima/maxima
+// dia a dia, exatamente como no video.
+// =============================================================
+input
+  Periodo(2);
+var
+  vEntrada, vAlvo : Float;
+begin
+  vEntrada := Lowest(Low, Periodo);
+  vAlvo    := Highest(High, Periodo);
+
+  if (IsBought) then
+    begin
+      SellToCoverLimit(vAlvo);
+    end
+  else
+    begin
+      BuyLimit(vEntrada);
+    end;
+end;
