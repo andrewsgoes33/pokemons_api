@@ -1,20 +1,23 @@
 // =============================================================
 // Setup MAXIMAS E MINIMAS - Stormer (aula "A Terceira Onda")
+// Fiel aos blocos do Wealth-Lab usados por ele:
+//   Buy at Limit 0% below Lowest(Low,1)
+//   Sell at Limit 0% above Highest(High,2)   (Same-Bar desligado)
+//   Sell after 3 bars
 //
 // Entrada: compra limitada na MINIMA do ultimo candle fechado
 // Saida 1: venda limitada na MAXIMA dos 2 ultimos candles fechados
-//          (recalculada a cada candle)
-// Saida 2: se o alvo nao for atingido, sai no fechamento do 3o
-//          candle apos a entrada. A NTSL nao envia ordem no
-//          fechamento, entao a venda a mercado sai na abertura do
-//          candle seguinte (o mais proximo do fechamento possivel).
+//          (recalculada a cada candle; nunca no candle da compra)
+// Saida 2: apos 3 candles posicionado (o da compra conta como o 1o),
+//          zera a mercado na abertura do candle seguinte - igual ao
+//          "Sell after 3 bars" do Wealth-Lab.
 //
 // nCandles: candles desde a entrada (0 = candle da compra,
 // -1 = fora da posicao); o [1] le o valor do candle anterior.
-// Nao vende no candle da compra e nao recompra no candle da venda.
+// Nao recompra no candle da venda (Single Position do Wealth-Lab).
 // =============================================================
 input
-  CandlesSaida(3);
+  BarrasSaida(3);
 var
   nCandles : Integer;
 begin
@@ -25,7 +28,7 @@ begin
       else
         nCandles := nCandles[1] + 1;
 
-      if (nCandles > CandlesSaida) then
+      if (nCandles >= BarrasSaida) then
         SellToCoverAtMarket
       else if (nCandles >= 1) then
         SellToCoverLimit(Highest(High, 2)[1]);
