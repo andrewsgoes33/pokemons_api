@@ -1,0 +1,41 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - variacao com ALVO FIXO
+//
+// Entrada: compra limitada na MINIMA dos 2 ultimos candles fechados
+// Alvo:    venda limitada na MAXIMA desses mesmos 2 candles,
+//          congelada no candle da entrada e mantida ate executar.
+// Sem stop: se o preco nao voltar ao alvo, a posicao fica aberta.
+//
+// Uma operacao por candle, como no original: nao vende no mesmo
+// candle em que comprou e nao recompra no candle em que vendeu.
+// nComprado guarda se o candle anterior terminou comprado (1) ou
+// fora da posicao (0); o [1] le o valor do candle anterior.
+// =============================================================
+input
+  Periodo(2);
+var
+  vEntrada, vAlvoFixo : Float;
+  nComprado           : Integer;
+begin
+  vEntrada := Lowest(Low, Periodo)[1];
+
+  if (IsBought) then
+    begin
+      if (nComprado[1] = 0) then
+        vAlvoFixo := Highest(High, Periodo)[1]
+      else
+        vAlvoFixo := vAlvoFixo[1];
+
+      if (nComprado[1] = 1) then
+        SellToCoverLimit(vAlvoFixo);
+
+      nComprado := 1;
+    end
+  else
+    begin
+      if (nComprado[1] = 0) then
+        BuyLimit(vEntrada);
+
+      nComprado := 0;
+    end;
+end;
