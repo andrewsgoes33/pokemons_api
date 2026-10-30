@@ -5,18 +5,20 @@
 // Comprado:        venda limitada na MAXIMA dos 2 ultimos candles
 // Sem stop: a saida e sempre a maxima dos 2 ultimos candles.
 //
-// O codigo roda no fechamento de cada candle e a ordem vale so
-// para o candle seguinte; se nao executar, e recalculada no
-// proximo fechamento - por isso ela "acompanha" a minima/maxima
-// dia a dia, exatamente como no video.
+// O [1] faz a conta usar so os 2 ultimos candles JA FECHADOS.
+// O Profit roda o codigo enquanto o candle se forma; com [0] a
+// minima/maxima do proprio dia entraria na conta e a ordem
+// "perseguiria" o preco (compra na minima e venda na maxima do
+// mesmo dia). Ordem limitada executa no preco ou melhor: se o
+// papel abrir em gap alem do alvo/entrada, executa na abertura.
 // =============================================================
 input
   Periodo(2);
 var
   vEntrada, vAlvo : Float;
 begin
-  vEntrada := Lowest(Low, Periodo);
-  vAlvo    := Highest(High, Periodo);
+  vEntrada := Lowest(Low, Periodo)[1];
+  vAlvo    := Highest(High, Periodo)[1];
 
   if (IsBought) then
     begin
