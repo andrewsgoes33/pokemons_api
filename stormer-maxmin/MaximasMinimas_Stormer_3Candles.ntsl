@@ -1,0 +1,40 @@
+// =============================================================
+// Setup MAXIMAS E MINIMAS - Stormer (aula "A Terceira Onda")
+//
+// Entrada: compra limitada na MINIMA do ultimo candle fechado
+// Saida 1: venda limitada na MAXIMA dos 2 ultimos candles fechados
+//          (recalculada a cada candle)
+// Saida 2: se o alvo nao for atingido, sai no fechamento do 3o
+//          candle apos a entrada. A NTSL nao envia ordem no
+//          fechamento, entao a venda a mercado sai na abertura do
+//          candle seguinte (o mais proximo do fechamento possivel).
+//
+// nCandles: candles desde a entrada (0 = candle da compra,
+// -1 = fora da posicao); o [1] le o valor do candle anterior.
+// Nao vende no candle da compra e nao recompra no candle da venda.
+// =============================================================
+input
+  CandlesSaida(3);
+var
+  nCandles : Integer;
+begin
+  if (IsBought) then
+    begin
+      if (nCandles[1] < 0) then
+        nCandles := 0
+      else
+        nCandles := nCandles[1] + 1;
+
+      if (nCandles > CandlesSaida) then
+        SellToCoverAtMarket
+      else if (nCandles >= 1) then
+        SellToCoverLimit(Highest(High, 2)[1]);
+    end
+  else
+    begin
+      if (nCandles[1] < 0) then
+        BuyLimit(Low[1]);
+
+      nCandles := -1;
+    end;
+end;
