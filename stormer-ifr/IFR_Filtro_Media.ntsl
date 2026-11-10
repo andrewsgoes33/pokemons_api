@@ -1,0 +1,44 @@
+// =============================================================
+// IFR com saida na maxima dos 2 ultimos candles, stop no tempo
+// e filtro de media movel configuravel.
+// Filtro ligado: so compra com o preco ACIMA da media escolhida.
+// =============================================================
+input
+  deslocamento(0);    //ATENÇÃO: 0 para intraday e 1 para diário
+  stop_no_tempo(5);   //dias
+  usar_filtro(1);     //1 = só compra acima da média | 0 = sem filtro
+  periodo_media(20);  //período da média do filtro
+  tipo_media(0);      //0 = aritmética | 1 = exponencial
+var
+  vMaxima, vMedia  : float;
+  diaentr,contagem : integer;
+  bFiltroOk        : boolean;
+begin
+  vMaxima := highest(high,2)[deslocamento];
+
+  if (tipo_media = 1) then
+    vMedia := MediaExp(periodo_media, Close)
+  else
+    vMedia := Media(periodo_media, Close);
+
+  bFiltroOk := True;
+  if (usar_filtro = 1) and (Close <= vMedia) then
+    bFiltroOk := False;
+
+  if (IsBought) then
+    begin
+      contagem := CurrentBar - diaentr;
+      SellToCoverlimit(vMaxima);
+      if (contagem >= stop_no_tempo) then
+        ClosePosition;
+    end;
+
+  if (BuyPosition = 0) then
+    begin
+      if (RSI(10,0) < 30) and (bFiltroOk) then
+        begin
+          diaentr := currentbar;
+          BuyAtMarket;
+        end;
+    end;
+end;
