@@ -1,0 +1,78 @@
+// =============================================================
+// HiLo Activator - compra na virada do HiLo (somente compra)
+//
+// Entrada (tipo_entrada):
+//   1 = rompimento da maxima do candle em que o HiLo virou para
+//       compra; a ordem vale enquanto o HiLo seguir comprado
+//   0 = fechamento do candle que virou; no backtest a compra sai na
+//       abertura do candle seguinte (o mais proximo do fechamento)
+// Stop (tipo_stop):
+//   0 = atras do HiLo: acompanha a linha do indicador
+//   1 = fundo anterior: menor minima dos ultimos candles, fixa
+// Tambem sai a mercado quando o HiLo vira para venda.
+// Uma operacao por virada: so volta a comprar na proxima virada.
+//
+// As decisoes usam candles ja fechados ([1], [2]) porque o Profit
+// roda o codigo durante a formacao do candle.
+// =============================================================
+input
+  periodo_hilo(6);   // 6 diario | 4 semanal | 16 no grafico de 60 min
+  tipo_entrada(1);   // 1 = rompimento | 0 = fechamento
+  tipo_stop(0);      // 0 = atras do HiLo | 1 = fundo anterior
+  barras_fundo(10);  // candles para procurar o fundo anterior
+  folga_pct(1);      // folga do preco limite das ordens stop, em %
+var
+  vMediaMax, vMediaMin    : Float;
+  vGatilho, vFundo, vStop : Float;
+  nTend, nCicloUsado      : Integer;
+  bVirouCompra            : Boolean;
+begin
+  // HiLo: compara o preco com as medias das maximas e das minimas
+  // dos N candles anteriores; entre as duas medias, mantem o estado
+  vMediaMax := Media(periodo_hilo, High)[1];
+  vMediaMin := Media(periodo_hilo, Low)[1];
+
+  nTend := nTend[1];
+  if (Close > vMediaMax) then
+    nTend := 1
+  else if (Close < vMediaMin) then
+    nTend := -1;
+
+  bVirouCompra := False;
+  if (nTend[1] = 1) and (nTend[2] = -1) then
+    bVirouCompra := True;
+
+  if (bVirouCompra) then
+    begin
+      vGatilho := High[1];
+      vFundo   := Lowest(Low, barras_fundo)[1];
+    end;
+
+  if (nTend[1] = -1) then
+    nCicloUsado := 0;
+
+  if (IsBought) then
+    begin
+      nCicloUsado := 1;
+
+      if (tipo_stop = 1) then
+        vStop := vFundo
+      else
+        vStop := vMediaMin;
+
+      if (nTend[1] = -1) or (Close < vStop) then
+        SellToCoverAtMarket
+      else
+        SellToCoverStop(vStop, vStop * (1 - folga_pct * 0.01));
+    end
+  else if (nCicloUsado = 0) and (vGatilho > 0) then
+    begin
+      if (tipo_entrada = 0) then
+        begin
+          if (bVirouCompra) then
+            BuyAtMarket;
+        end
+      else if (nTend[1] = 1) then
+        BuyStop(vGatilho, vGatilho * (1 + folga_pct * 0.01));
+    end;
+end;
