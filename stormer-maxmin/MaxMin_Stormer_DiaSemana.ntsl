@@ -7,13 +7,17 @@
 //                  em qualquer dia (a saida nao e filtrada)
 // Sem stop: a saida e sempre a maxima dos 2 ultimos candles.
 //
-// O [1] faz a conta usar so os 2 ultimos candles JA FECHADOS.
-// DayOfWeek(Date) e o dia do candle atual, ou seja, o dia em que a
-// ordem de compra fica valendo e pode executar.
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle do dia se
+// forma, e o [1] faz a conta usar so os candles ja fechados.
+// No intradiario o codigo roda no fechamento de cada candle, entao
+// o [0] ja e o candle que acabou de fechar; com 1 a conta atrasa
+// um candle.
 // =============================================================
 input
   Periodo(2);
-  Segunda(1);   // 1 = compra neste dia | 0 = nao compra
+  Deslocamento(1);   // 1 = diario | 0 = intradiario
+  Segunda(1);        // 1 = compra neste dia | 0 = nao compra
   Terca(1);
   Quarta(1);
   Quinta(1);
@@ -23,8 +27,8 @@ var
   nDia            : Integer;
   bDiaLiberado    : Boolean;
 begin
-  vEntrada := Lowest(Low, Periodo)[1];
-  vAlvo    := Highest(High, Periodo)[1];
+  vEntrada := Lowest(Low, Periodo)[Deslocamento];
+  vAlvo    := Highest(High, Periodo)[Deslocamento];
 
   nDia := DayOfWeek(Date);
   bDiaLiberado := False;
