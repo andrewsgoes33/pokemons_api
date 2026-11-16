@@ -1,0 +1,46 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - versao original + filtro de media
+//
+// Fora da posicao: compra limitada na MINIMA dos 2 ultimos candles,
+//                  so se o ultimo candle fechou ACIMA da media
+// Comprado:        venda limitada na MAXIMA dos 2 ultimos candles
+//                  (a saida nao e filtrada)
+// Sem stop: a saida e sempre a maxima dos 2 ultimos candles.
+//
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle do dia se
+// forma, e o [1] faz a conta usar so os candles ja fechados.
+// No intradiario o codigo roda no fechamento de cada candle, entao
+// o [0] ja e o candle que acabou de fechar.
+// =============================================================
+input
+  Periodo(2);
+  Deslocamento(1);   // 1 = diario | 0 = intradiario
+  UsarFiltro(1);     // 1 = so compra acima da media | 0 = sem filtro
+  PeriodoMedia(20);  // periodo da media do filtro
+  TipoMedia(0);      // 0 = aritmetica | 1 = exponencial
+var
+  vEntrada, vAlvo, vMedia : Float;
+  bFiltroOk               : Boolean;
+begin
+  vEntrada := Lowest(Low, Periodo)[Deslocamento];
+  vAlvo    := Highest(High, Periodo)[Deslocamento];
+
+  if (TipoMedia = 1) then
+    vMedia := MediaExp(PeriodoMedia, Close)[Deslocamento]
+  else
+    vMedia := Media(PeriodoMedia, Close)[Deslocamento];
+
+  bFiltroOk := True;
+  if (UsarFiltro = 1) and (Close[Deslocamento] <= vMedia) then
+    bFiltroOk := False;
+
+  if (IsBought) then
+    begin
+      SellToCoverLimit(vAlvo);
+    end
+  else if (bFiltroOk) then
+    begin
+      BuyLimit(vEntrada);
+    end;
+end;
