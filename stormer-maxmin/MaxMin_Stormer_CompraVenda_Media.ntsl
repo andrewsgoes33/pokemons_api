@@ -1,0 +1,54 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - compra e venda com filtro de media
+//
+// Ultimo candle fechou ACIMA da media -> so compra:
+//   compra limitada na MINIMA dos 2 ultimos candles
+//   zera com venda limitada na MAXIMA dos 2 ultimos candles
+// Ultimo candle fechou ABAIXO da media -> so vende:
+//   venda a descoberto limitada na MAXIMA dos 2 ultimos candles
+//   zera com compra limitada na MINIMA dos 2 ultimos candles
+// A media so decide a ENTRADA; a posicao aberta sai sempre pelo
+// alvo, mesmo que o preco cruze a media. Sem stop.
+//
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle do dia se
+// forma, e o [1] faz a conta usar so os candles ja fechados.
+// No intradiario o codigo roda no fechamento de cada candle, entao
+// o [0] ja e o candle que acabou de fechar.
+// =============================================================
+input
+  Periodo(2);
+  Deslocamento(1);   // 1 = diario | 0 = intradiario
+  PeriodoMedia(20);  // periodo da media que separa compra de venda
+  TipoMedia(0);      // 0 = aritmetica | 1 = exponencial
+  OperarCompra(1);   // 1 = liga o lado comprado | 0 = desliga
+  OperarVenda(1);    // 1 = liga o lado vendido  | 0 = desliga
+var
+  vMinima, vMaxima, vMedia, vFech : Float;
+begin
+  vMinima := Lowest(Low, Periodo)[Deslocamento];
+  vMaxima := Highest(High, Periodo)[Deslocamento];
+  vFech   := Close[Deslocamento];
+
+  if (TipoMedia = 1) then
+    vMedia := MediaExp(PeriodoMedia, Close)[Deslocamento]
+  else
+    vMedia := Media(PeriodoMedia, Close)[Deslocamento];
+
+  if (IsBought) then
+    begin
+      SellToCoverLimit(vMaxima);
+    end
+  else if (IsSold) then
+    begin
+      BuyToCoverLimit(vMinima);
+    end
+  else if (vFech > vMedia) and (OperarCompra = 1) then
+    begin
+      BuyLimit(vMinima);
+    end
+  else if (vFech < vMedia) and (OperarVenda = 1) then
+    begin
+      SellShortLimit(vMaxima);
+    end;
+end;
