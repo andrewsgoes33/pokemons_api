@@ -1,0 +1,49 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - so VENDA, com ordens A MERCADO
+//
+// Fora da posicao: quando o preco chega na MAXIMA dos 2 ultimos
+//                  candles, vende a descoberto a mercado
+// Vendido:         quando o preco chega na MINIMA dos 2 ultimos
+//                  candles, zera comprando a mercado
+// Sem stop: a saida e sempre a minima dos 2 ultimos candles.
+//
+// Diario: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle se forma: o
+// ultimo preco e comparado com o nivel e a ordem sai na hora.
+// No intradiario o codigo roda no fechamento do candle: se a maxima
+// (ou minima) do candle tocou o nivel, a ordem sai na abertura do
+// candle seguinte.
+// Os niveis usam sempre os 2 candles anteriores ao candle atual.
+// =============================================================
+input
+  Periodo(2);
+  Diario(1);   // 1 = grafico diario | 0 = intradiario
+var
+  vEntrada, vAlvo          : Float;
+  vPrecoAlta, vPrecoBaixa  : Float;
+begin
+  vEntrada := Highest(High, Periodo)[1];
+  vAlvo    := Lowest(Low, Periodo)[1];
+
+  if (Diario = 1) then
+    begin
+      vPrecoAlta  := Close;
+      vPrecoBaixa := Close;
+    end
+  else
+    begin
+      vPrecoAlta  := High;
+      vPrecoBaixa := Low;
+    end;
+
+  if (IsSold) then
+    begin
+      if (vPrecoBaixa <= vAlvo) then
+        BuyToCoverAtMarket;
+    end
+  else
+    begin
+      if (vPrecoAlta >= vEntrada) then
+        SellShortAtMarket;
+    end;
+end;
