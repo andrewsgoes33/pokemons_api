@@ -1,0 +1,73 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - compra e venda com filtro de 2 medias
+//
+// Tendencia de alta (so compra): fechamento acima das 2 medias
+//   e media curta acima da longa
+//   compra limitada na MINIMA dos 2 ultimos candles
+//   zera com venda limitada na MAXIMA dos 2 ultimos candles
+// Tendencia de baixa (so vende): fechamento abaixo das 2 medias
+//   e media curta abaixo da longa
+//   venda a descoberto limitada na MAXIMA dos 2 ultimos candles
+//   zera com compra limitada na MINIMA dos 2 ultimos candles
+// Fora dessas duas situacoes nao abre posicao.
+// As medias so decidem a ENTRADA; a posicao aberta sai sempre
+// pelo alvo. Sem stop.
+//
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle do dia se
+// forma, e o [1] faz a conta usar so os candles ja fechados.
+// No intradiario o codigo roda no fechamento de cada candle, entao
+// o [0] ja e o candle que acabou de fechar.
+// =============================================================
+input
+  Periodo(2);
+  Deslocamento(1);   // 1 = diario | 0 = intradiario
+  PeriodoCurta(20);  // media curta
+  PeriodoLonga(50);  // media longa
+  TipoMedia(0);      // 0 = aritmetica | 1 = exponencial (vale para as 2)
+  OperarCompra(1);   // 1 = liga o lado comprado | 0 = desliga
+  OperarVenda(1);    // 1 = liga o lado vendido  | 0 = desliga
+var
+  vMinima, vMaxima, vFech, vCurta, vLonga : Float;
+  bTendAlta, bTendBaixa                  : Boolean;
+begin
+  vMinima := Lowest(Low, Periodo)[Deslocamento];
+  vMaxima := Highest(High, Periodo)[Deslocamento];
+  vFech   := Close[Deslocamento];
+
+  if (TipoMedia = 1) then
+    begin
+      vCurta := MediaExp(PeriodoCurta, Close)[Deslocamento];
+      vLonga := MediaExp(PeriodoLonga, Close)[Deslocamento];
+    end
+  else
+    begin
+      vCurta := Media(PeriodoCurta, Close)[Deslocamento];
+      vLonga := Media(PeriodoLonga, Close)[Deslocamento];
+    end;
+
+  bTendAlta := False;
+  if (vFech > vCurta) and (vFech > vLonga) and (vCurta > vLonga) then
+    bTendAlta := True;
+
+  bTendBaixa := False;
+  if (vFech < vCurta) and (vFech < vLonga) and (vCurta < vLonga) then
+    bTendBaixa := True;
+
+  if (IsBought) then
+    begin
+      SellToCoverLimit(vMaxima);
+    end
+  else if (IsSold) then
+    begin
+      BuyToCoverLimit(vMinima);
+    end
+  else if (bTendAlta) and (OperarCompra = 1) then
+    begin
+      BuyLimit(vMinima);
+    end
+  else if (bTendBaixa) and (OperarVenda = 1) then
+    begin
+      SellShortLimit(vMaxima);
+    end;
+end;
