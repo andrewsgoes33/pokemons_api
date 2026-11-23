@@ -1,0 +1,33 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - versao original, so VENDA, sem filtros
+//
+// Fora da posicao: venda a descoberto limitada na MAXIMA dos
+//                  2 ultimos candles
+// Vendido:         zera com compra limitada na MINIMA dos
+//                  2 ultimos candles
+// Sem stop: a saida e sempre a minima dos 2 ultimos candles.
+//
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle do dia se
+// forma, e o [1] faz a conta usar so os candles ja fechados.
+// No intradiario o codigo roda no fechamento de cada candle, entao
+// o [0] ja e o candle que acabou de fechar.
+// =============================================================
+input
+  Periodo(2);
+  Deslocamento(1);   // 1 = diario | 0 = intradiario
+var
+  vEntrada, vAlvo : Float;
+begin
+  vEntrada := Highest(High, Periodo)[Deslocamento];
+  vAlvo    := Lowest(Low, Periodo)[Deslocamento];
+
+  if (IsSold) then
+    begin
+      BuyToCoverLimit(vAlvo);
+    end
+  else
+    begin
+      SellShortLimit(vEntrada);
+    end;
+end;
