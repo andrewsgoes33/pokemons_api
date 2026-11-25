@@ -1,0 +1,42 @@
+// =============================================================
+// MAX-MIN REVERSO (rompimento) para INTRADAY - somente compra
+//
+// Fora da posicao: compra stop no rompimento da MAXIMA dos
+//                  2 ultimos candles, so dentro da janela de horario
+// Comprado:        stop na perda da MINIMA dos 2 ultimos candles
+//                  (so sobe enquanto a posicao estiver aberta)
+// Zeragem:         no fechamento do candle de HoraZerar, zera a
+//                  mercado (sai na abertura do candle seguinte)
+//
+// No intradiario o Profit roda o codigo no fechamento de cada
+// candle e as ordens valem para o candle seguinte, entao [0] e o
+// candle que acabou de fechar. Por isso o stop so passa a valer no
+// candle seguinte ao da compra; se o candle da compra fechar abaixo
+// do nivel de stop que valia nele, a saida e a mercado.
+// Horarios no formato HHMM do candle no grafico (10:15 = 1015).
+// =============================================================
+input
+  Periodo(2);
+  FolgaPct(1);           // folga do preco limite das ordens stop, em %
+  HoraInicio(1015);      // so abre posicao a partir deste candle
+  HoraFimEntradas(1600); // nao abre posicao depois deste candle
+  HoraZerar(1640);       // no fechamento deste candle zera a mercado
+var
+  vEntrada, vSaida, vSaidaAnterior : Float;
+begin
+  vEntrada       := Highest(High, Periodo);
+  vSaida         := Lowest(Low, Periodo);
+  vSaidaAnterior := Lowest(Low, Periodo)[1];
+
+  if (IsBought) then
+    begin
+      if (Time >= HoraZerar) or (Close < vSaidaAnterior) then
+        SellToCoverAtMarket
+      else
+        SellToCoverStop(vSaida, vSaida * (1 - FolgaPct * 0.01));
+    end
+  else if (Time >= HoraInicio) and (Time <= HoraFimEntradas) then
+    begin
+      BuyStop(vEntrada, vEntrada * (1 + FolgaPct * 0.01));
+    end;
+end;
