@@ -1,0 +1,29 @@
+// =============================================================
+// Coloracao: mesma regra de cor de Renko_Virada_Cor.ntsl
+// Verde: linha rapida acima da media exponencial dela
+// Vermelho: linha rapida abaixo
+// Use para comparar com o indicador do grafico antes de testar.
+// =============================================================
+input
+  PeriodoForce(3);
+  TipoForce(0);      // 0 = aritmetica | 1 = exponencial
+  PeriodoSinal(2);
+var
+  vForce, vSinal, vAlfa : Float;
+begin
+  if (TipoForce = 1) then
+    vForce := MediaExp(PeriodoForce, Close)
+  else
+    vForce := Media(PeriodoForce, Close);
+
+  vAlfa := 2.0 / (PeriodoSinal + 1.0);
+  if (vSinal[1] = 0) then
+    vSinal := vForce
+  else
+    vSinal := vSinal[1] + vAlfa * (vForce - vSinal[1]);
+
+  if (vForce > vSinal) then
+    PaintBar(clGreen)
+  else if (vForce < vSinal) then
+    PaintBar(clRed);
+end;

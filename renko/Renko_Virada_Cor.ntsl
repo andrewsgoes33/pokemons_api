@@ -1,0 +1,51 @@
+// =============================================================
+// RENKO - virada de cor da media rapida (compra e venda)
+//
+// Linha rapida: media de PeriodoForce do fechamento.
+// Linha de sinal: media exponencial de PeriodoSinal da linha rapida.
+// Verde (rapida acima do sinal): compra; se estiver vendido, vira a
+//   mao (zera a venda e compra).
+// Vermelho (rapida abaixo do sinal): vende; se estiver comprado,
+//   vira a mao (zera a compra e vende).
+// Sem stop e sem alvo: a saida e a virada de cor.
+// Horarios e zeragem ficam na configuracao do Profit.
+//
+// A linha de sinal e calculada a partir do valor do tijolo anterior
+// (vSinal[1]), entao o resultado e o mesmo se o Profit rodar o codigo
+// uma ou varias vezes por tijolo.
+// =============================================================
+input
+  PeriodoForce(3);   // periodo da linha rapida
+  TipoForce(0);      // 0 = aritmetica | 1 = exponencial (linha rapida)
+  PeriodoSinal(2);   // periodo da media exponencial da linha rapida
+  OperarCompra(1);   // 1 = liga o lado comprado | 0 = desliga
+  OperarVenda(1);    // 1 = liga o lado vendido  | 0 = desliga
+var
+  vForce, vSinal, vAlfa : Float;
+begin
+  if (TipoForce = 1) then
+    vForce := MediaExp(PeriodoForce, Close)
+  else
+    vForce := Media(PeriodoForce, Close);
+
+  vAlfa := 2.0 / (PeriodoSinal + 1.0);
+  if (vSinal[1] = 0) then
+    vSinal := vForce
+  else
+    vSinal := vSinal[1] + vAlfa * (vForce - vSinal[1]);
+
+  if (vForce > vSinal) then
+    begin
+      if (IsSold) then
+        BuyToCoverAtMarket;
+      if (not IsBought) and (OperarCompra = 1) then
+        BuyAtMarket;
+    end
+  else if (vForce < vSinal) then
+    begin
+      if (IsBought) then
+        SellToCoverAtMarket;
+      if (not IsSold) and (OperarVenda = 1) then
+        SellShortAtMarket;
+    end;
+end;
