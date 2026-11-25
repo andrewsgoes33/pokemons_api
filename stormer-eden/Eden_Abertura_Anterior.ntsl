@@ -6,9 +6,14 @@
 // Candle de referencia: o ultimo candle fechado.
 // Entrada: compra limitada na ABERTURA do candle de referencia.
 // Stop:    na MINIMA do candle de referencia.
-// Alvo:    entrada + MultAlvo x amplitude (maxima - minima) do
-//          candle de referencia. 1 = "um candle pra cima".
-// Entrada, stop e alvo ficam congelados enquanto a posicao existir.
+// Alvo (TipoAlvo):
+//   1 = depois de N candles POSITIVOS fechados apos a compra
+//       (o candle da compra nao conta), zera a mercado. A NTSL nao
+//       envia ordem no fechamento, entao a venda sai na abertura do
+//       candle seguinte ao N-esimo candle positivo.
+//   0 = alvo de preco: entrada + MultAlvo x amplitude do candle de
+//       referencia.
+// O stop vale nos dois tipos de alvo.
 //
 // Deslocamento: 1 no grafico diario, 0 no intradiario.
 // No diario o Profit roda o codigo enquanto o candle se forma, e o
@@ -21,12 +26,15 @@ input
   PeriodoLonga(80);     // media longa do Eden dos Traders
   TipoMedia(1);         // 0 = aritmetica | 1 = exponencial
   SoCandlePositivo(1);  // 1 = referencia so em candle de alta | 0 = qualquer
-  MultAlvo(1.0);        // alvo em amplitudes do candle de referencia
+  TipoAlvo(1);          // 1 = N candles positivos | 0 = alvo de preco
+  CandlesPositivos(2);  // N candles de alta apos a compra (TipoAlvo = 1)
+  MultAlvo(1.0);        // alvo em amplitudes do candle de referencia (TipoAlvo = 0)
   FolgaPct(1);          // folga do preco limite da ordem stop, em %
 var
   vCurta, vCurtaAnt, vLonga, vLongaAnt : Float;
   vEntrada, vStop, vAlvo               : Float;
-  nAnt                                 : Integer;
+  nAnt, nBarraEntrada                  : Integer;
+  nQtd, nPositivos, i, nIdx            : Integer;
   bEden, bCandleOk                     : Boolean;
 begin
   nAnt := Deslocamento + 1;
@@ -52,16 +60,30 @@ begin
 
   if (IsBought) then
     begin
+      // conta os candles positivos ja fechados depois do candle da compra
+      nPositivos := 0;
+      nQtd := CurrentBar - nBarraEntrada - 1;
+      for i := 0 to nQtd - 1 do
+        begin
+          nIdx := Deslocamento + i;
+          if (Close[nIdx] > Open[nIdx]) then
+            nPositivos := nPositivos + 1;
+        end;
+
       if (Close < vStop) then
+        SellToCoverAtMarket
+      else if (TipoAlvo = 1) and (nPositivos >= CandlesPositivos) then
         SellToCoverAtMarket
       else
         begin
-          SellToCoverLimit(vAlvo);
+          if (TipoAlvo = 0) then
+            SellToCoverLimit(vAlvo);
           SellToCoverStop(vStop, vStop * (1 - FolgaPct * 0.01));
         end;
     end
   else
     begin
+      nBarraEntrada := CurrentBar;
       vEntrada := Open[Deslocamento];
       vStop    := Low[Deslocamento];
       vAlvo    := vEntrada + MultAlvo * (High[Deslocamento] - Low[Deslocamento]);
