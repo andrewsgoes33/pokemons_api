@@ -1,0 +1,40 @@
+// =============================================================
+// Setup MAX-MIN do Stormer - versao original + stop no tempo
+//
+// Fora da posicao: compra limitada na MINIMA dos 2 ultimos candles
+// Comprado:        venda limitada na MAXIMA dos 2 ultimos candles
+// Stop no tempo:   se o alvo nao for atingido depois de DiasSaida
+//                  candles posicionado (o candle da compra conta
+//                  como o 1o), zera a mercado na abertura do candle
+//                  seguinte. DiasSaida = 0 desliga (versao original).
+//
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle se forma, e o
+// [1] faz a conta usar so os candles ja fechados. No intradiario o
+// codigo roda no fechamento de cada candle, entao o [0] ja e o
+// candle que acabou de fechar.
+// =============================================================
+input
+  Periodo(2);
+  Deslocamento(1);   // 1 = diario | 0 = intradiario
+  DiasSaida(3);      // stop no tempo em candles | 0 = sem stop no tempo
+var
+  vEntrada, vAlvo : Float;
+  nBarraEntrada   : Integer;
+begin
+  vEntrada := Lowest(Low, Periodo)[Deslocamento];
+  vAlvo    := Highest(High, Periodo)[Deslocamento];
+
+  if (IsBought) then
+    begin
+      if (DiasSaida > 0) and (CurrentBar - nBarraEntrada >= DiasSaida) then
+        SellToCoverAtMarket
+      else
+        SellToCoverLimit(vAlvo);
+    end
+  else
+    begin
+      nBarraEntrada := CurrentBar;
+      BuyLimit(vEntrada);
+    end;
+end;
