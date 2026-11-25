@@ -1,0 +1,43 @@
+// =============================================================
+// MAX-MIN REVERSO (rompimento) - somente compra
+//
+// Fora da posicao: compra stop no rompimento da MAXIMA dos
+//                  2 ultimos candles
+// Comprado:        sai com stop na perda da MINIMA dos
+//                  2 ultimos candles (stop movel: so sobe enquanto
+//                  a posicao estiver aberta)
+// Ordem stop no Profit e stop-limitada: FolgaPct define ate onde
+// o preco limite vai alem do gatilho. Se o preco ja estiver alem do
+// nivel (gap), a ordem sai a mercado.
+//
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle se forma, e o
+// [1] faz a conta usar so os candles ja fechados. No intradiario o
+// codigo roda no fechamento de cada candle, entao o [0] ja e o
+// candle que acabou de fechar.
+// =============================================================
+input
+  Periodo(2);
+  Deslocamento(1);   // 1 = diario | 0 = intradiario
+  FolgaPct(1);       // folga do preco limite das ordens stop, em %
+var
+  vEntrada, vSaida : Float;
+begin
+  vEntrada := Highest(High, Periodo)[Deslocamento];
+  vSaida   := Lowest(Low, Periodo)[Deslocamento];
+
+  if (IsBought) then
+    begin
+      if (Close <= vSaida) then
+        SellToCoverAtMarket
+      else
+        SellToCoverStop(vSaida, vSaida * (1 - FolgaPct * 0.01));
+    end
+  else
+    begin
+      if (Close >= vEntrada) then
+        BuyAtMarket
+      else
+        BuyStop(vEntrada, vEntrada * (1 + FolgaPct * 0.01));
+    end;
+end;
