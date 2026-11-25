@@ -1,0 +1,79 @@
+// =============================================================
+// Compra na ABERTURA DO CANDLE ANTERIOR dentro do Eden dos Traders
+// (somente compra)
+//
+// Filtro (Eden dos Traders): media curta e media longa subindo.
+// Candle de referencia: o ultimo candle fechado.
+// Entrada: compra limitada na ABERTURA do candle de referencia.
+// Stop:    na MINIMA do candle de referencia.
+// Alvo:    entrada + MultAlvo x amplitude (maxima - minima) do
+//          candle de referencia. 1 = "um candle pra cima".
+// Entrada, stop e alvo ficam congelados enquanto a posicao existir.
+//
+// Deslocamento: 1 no grafico diario, 0 no intradiario.
+// No diario o Profit roda o codigo enquanto o candle se forma, e o
+// [1] faz a conta usar o candle ja fechado. No intradiario o codigo
+// roda no fechamento do candle, entao o [0] ja e o candle fechado.
+// =============================================================
+input
+  Deslocamento(1);      // 1 = diario | 0 = intradiario
+  PeriodoCurta(8);      // media curta do Eden dos Traders
+  PeriodoLonga(80);     // media longa do Eden dos Traders
+  TipoMedia(1);         // 0 = aritmetica | 1 = exponencial
+  SoCandlePositivo(1);  // 1 = referencia so em candle de alta | 0 = qualquer
+  MultAlvo(1.0);        // alvo em amplitudes do candle de referencia
+  FolgaPct(1);          // folga do preco limite da ordem stop, em %
+var
+  vCurta, vCurtaAnt, vLonga, vLongaAnt : Float;
+  vEntrada, vStop, vAlvo               : Float;
+  nAnt                                 : Integer;
+  bEden, bCandleOk                     : Boolean;
+begin
+  nAnt := Deslocamento + 1;
+
+  if (TipoMedia = 1) then
+    begin
+      vCurta    := MediaExp(PeriodoCurta, Close)[Deslocamento];
+      vCurtaAnt := MediaExp(PeriodoCurta, Close)[nAnt];
+      vLonga    := MediaExp(PeriodoLonga, Close)[Deslocamento];
+      vLongaAnt := MediaExp(PeriodoLonga, Close)[nAnt];
+    end
+  else
+    begin
+      vCurta    := Media(PeriodoCurta, Close)[Deslocamento];
+      vCurtaAnt := Media(PeriodoCurta, Close)[nAnt];
+      vLonga    := Media(PeriodoLonga, Close)[Deslocamento];
+      vLongaAnt := Media(PeriodoLonga, Close)[nAnt];
+    end;
+
+  bEden := False;
+  if (vCurta > vCurtaAnt) and (vLonga > vLongaAnt) then
+    bEden := True;
+
+  if (IsBought) then
+    begin
+      if (Close < vStop) then
+        SellToCoverAtMarket
+      else
+        begin
+          SellToCoverLimit(vAlvo);
+          SellToCoverStop(vStop, vStop * (1 - FolgaPct * 0.01));
+        end;
+    end
+  else
+    begin
+      vEntrada := Open[Deslocamento];
+      vStop    := Low[Deslocamento];
+      vAlvo    := vEntrada + MultAlvo * (High[Deslocamento] - Low[Deslocamento]);
+
+      // sem pavio inferior o stop ficaria colado na entrada
+      bCandleOk := True;
+      if (vEntrada <= vStop) then
+        bCandleOk := False;
+      if (SoCandlePositivo = 1) and (Close[Deslocamento] <= Open[Deslocamento]) then
+        bCandleOk := False;
+
+      if (bEden) and (bCandleOk) and (Close > vStop) then
+        BuyLimit(vEntrada);
+    end;
+end;
