@@ -1,0 +1,35 @@
+// =============================================================
+// Indicador: L&S Volatility Index APROXIMADO
+// Mesmo calculo usado em LSVI_IFR_Compra.ntsl, para comparar com o
+// L&S Volatility Index do Profit no mesmo grafico.
+// =============================================================
+input
+  PeriodoLS(21);
+var
+  vMedia, vRet, vSoma, vSoma2  : Float;
+  vMediaRet, vVar, vHV, vLSVI  : Float;
+  i, nIdxAnt                   : Integer;
+begin
+  vMedia := Media(PeriodoLS, Close);
+
+  vSoma  := 0;
+  vSoma2 := 0;
+  for i := 0 to PeriodoLS - 1 do
+    begin
+      nIdxAnt := i + 1;
+      vRet    := Close[i] / Close[nIdxAnt] - 1;
+      vSoma   := vSoma + vRet;
+      vSoma2  := vSoma2 + vRet * vRet;
+    end;
+  vMediaRet := vSoma / PeriodoLS;
+  vVar      := vSoma2 / PeriodoLS - vMediaRet * vMediaRet;
+
+  vLSVI := 0;
+  if (vVar > 0) and (vMedia > 0) then
+    begin
+      vHV   := Sqrt(vVar) * Sqrt(252);
+      vLSVI := Abs(Close - vMedia) / vMedia / vHV * 100;
+    end;
+
+  Plot(vLSVI);
+end;

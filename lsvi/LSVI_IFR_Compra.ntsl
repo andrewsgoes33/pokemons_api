@@ -1,0 +1,72 @@
+// =============================================================
+// L&S Volatility Index + IFR - somente compra
+//
+// Entrada (no fechamento do candle, compra a mercado):
+//   candle positivo (fechamento acima da abertura)
+//   L&S Volatility Index acima de NivelLS (preco esticado da media)
+//   IFR abaixo de NivelIFRCompra (sobrevendido)
+// Saida: IFR chega em NivelIFRSaida, a mercado.
+// Sem stop e sem alvo. Uma operacao por vez.
+// Day trade: horario de inicio, ultima entrada e zeragem ficam na
+// configuracao do Profit.
+//
+// O L&S Volatility Index aqui e uma APROXIMACAO montada pela
+// descricao publica do indicador: distancia percentual do preco ate
+// a media simples de PeriodoLS dividida pela volatilidade historica
+// (desvio padrao dos retornos dos ultimos PeriodoLS candles x raiz
+// de 252), em escala x100. Compare com o indicador do Profit usando
+// LSVI_Aproximado_Indicador.ntsl antes de confiar no NivelLS.
+//
+// Deslocamento: 0 no intradiario, 1 no diario.
+// No intradiario o Profit roda o codigo no fechamento do candle, e a
+// compra a mercado sai na abertura do candle seguinte. No diario o
+// codigo roda durante o candle, e o [1] faz a conta usar o candle de
+// ontem; a compra sai na abertura do dia.
+// =============================================================
+input
+  Deslocamento(0);     // 0 = intradiario | 1 = diario
+  PeriodoLS(21);       // media e volatilidade do L&S Volatility Index
+  NivelLS(25);         // compra so com o L&S acima deste nivel
+  PeriodoIFR(9);       // periodo do IFR
+  NivelIFRCompra(30);  // compra com o IFR abaixo deste nivel
+  NivelIFRSaida(70);   // sai quando o IFR chega neste nivel
+var
+  vMedia, vRet, vSoma, vSoma2       : Float;
+  vMediaRet, vVar, vHV, vLSVI, vIFR : Float;
+  i, nIdx, nIdxAnt                  : Integer;
+begin
+  vMedia := Media(PeriodoLS, Close)[Deslocamento];
+
+  vSoma  := 0;
+  vSoma2 := 0;
+  for i := 0 to PeriodoLS - 1 do
+    begin
+      nIdx    := Deslocamento + i;
+      nIdxAnt := nIdx + 1;
+      vRet    := Close[nIdx] / Close[nIdxAnt] - 1;
+      vSoma   := vSoma + vRet;
+      vSoma2  := vSoma2 + vRet * vRet;
+    end;
+  vMediaRet := vSoma / PeriodoLS;
+  vVar      := vSoma2 / PeriodoLS - vMediaRet * vMediaRet;
+
+  vLSVI := 0;
+  if (vVar > 0) and (vMedia > 0) then
+    begin
+      vHV   := Sqrt(vVar) * Sqrt(252);
+      vLSVI := Abs(Close[Deslocamento] - vMedia) / vMedia / vHV * 100;
+    end;
+
+  vIFR := RSI(PeriodoIFR, 0)[Deslocamento];
+
+  if (IsBought) then
+    begin
+      if (vIFR >= NivelIFRSaida) then
+        SellToCoverAtMarket;
+    end
+  else
+    begin
+      if (Close[Deslocamento] > Open[Deslocamento]) and (vLSVI > NivelLS) and (vIFR < NivelIFRCompra) then
+        BuyAtMarket;
+    end;
+end;
