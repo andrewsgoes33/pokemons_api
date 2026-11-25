@@ -1,0 +1,79 @@
+// =============================================================
+// WINFUT 5 min - rompimento a favor da tendencia (compra e venda)
+//
+// Tendencia de alta: fechamento acima da media curta e media curta
+//   acima da longa -> compra stop na MAXIMA dos 2 ultimos candles
+// Tendencia de baixa: fechamento abaixo da media curta e media curta
+//   abaixo da longa -> venda stop na MINIMA dos 2 ultimos candles
+// Saida: stop movel no extremo oposto dos 2 ultimos candles
+//   (comprado: minima dos 2 candles | vendido: maxima dos 2 candles)
+//   e, se AlvoPontos > 0, alvo fixo em pontos a partir da entrada.
+// Horarios de operacao e zeragem ficam na configuracao do Profit.
+//
+// No intradiario o Profit roda o codigo no fechamento de cada
+// candle e as ordens valem para o candle seguinte. Por isso o stop
+// so passa a valer no candle seguinte ao da entrada; se o candle da
+// entrada fechar alem do nivel de stop que valia nele, a saida e a
+// mercado.
+// =============================================================
+input
+  Periodo(2);         // candles da maxima/minima
+  PeriodoCurta(20);   // media exponencial curta
+  PeriodoLonga(50);   // media exponencial longa
+  AlvoPontos(0);      // alvo fixo em pontos | 0 = sem alvo, so stop movel
+  FolgaPontos(50);    // folga do preco limite das ordens stop, em pontos
+  OperarCompra(1);    // 1 = liga o lado comprado | 0 = desliga
+  OperarVenda(1);     // 1 = liga o lado vendido  | 0 = desliga
+var
+  vMax, vMin, vMaxAnt, vMinAnt : Float;
+  vCurta, vLonga, vPrecoEntrada : Float;
+  bTendAlta, bTendBaixa         : Boolean;
+begin
+  vMax    := Highest(High, Periodo);
+  vMin    := Lowest(Low, Periodo);
+  vMaxAnt := Highest(High, Periodo)[1];
+  vMinAnt := Lowest(Low, Periodo)[1];
+  vCurta  := MediaExp(PeriodoCurta, Close);
+  vLonga  := MediaExp(PeriodoLonga, Close);
+
+  bTendAlta := False;
+  if (Close > vCurta) and (vCurta > vLonga) then
+    bTendAlta := True;
+
+  bTendBaixa := False;
+  if (Close < vCurta) and (vCurta < vLonga) then
+    bTendBaixa := True;
+
+  if (IsBought) then
+    begin
+      if (Close < vMinAnt) then
+        SellToCoverAtMarket
+      else
+        begin
+          SellToCoverStop(vMin, vMin - FolgaPontos);
+          if (AlvoPontos > 0) then
+            SellToCoverLimit(vPrecoEntrada + AlvoPontos);
+        end;
+    end
+  else if (IsSold) then
+    begin
+      if (Close > vMaxAnt) then
+        BuyToCoverAtMarket
+      else
+        begin
+          BuyToCoverStop(vMax, vMax + FolgaPontos);
+          if (AlvoPontos > 0) then
+            BuyToCoverLimit(vPrecoEntrada - AlvoPontos);
+        end;
+    end
+  else if (bTendAlta) and (OperarCompra = 1) then
+    begin
+      vPrecoEntrada := vMax;
+      BuyStop(vMax, vMax + FolgaPontos);
+    end
+  else if (bTendBaixa) and (OperarVenda = 1) then
+    begin
+      vPrecoEntrada := vMin;
+      SellShortStop(vMin, vMin - FolgaPontos);
+    end;
+end;
