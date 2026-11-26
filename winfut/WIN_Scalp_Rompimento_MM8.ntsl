@@ -1,0 +1,75 @@
+// =============================================================
+// WINFUT 1-2 min - Scalp no rompimento da maxima com media de 8
+//
+// Compra: se o ultimo candle fechou acima da media de PeriodoMedia,
+//   deixa uma compra stop na maxima desse candle. A ordem vale so no
+//   candle seguinte e e refeita a cada candle.
+// Venda (opcional, desligada por padrao): o espelho, com o fechamento
+//   abaixo da media e venda stop na minima do candle.
+// Saida sempre em OCO: alvo de Alvo e stop de Stop pontos a partir
+//   do preco do rompimento. As duas ordens ficam ativas desde o
+//   candle da entrada; quando uma executa, a outra deixa de existir.
+// Nao reentra no mesmo candle em que uma operacao terminou.
+// Horarios e zeragem ficam na configuracao do Profit.
+//
+// Deslocamento: 1 quando o Profit roda o codigo durante o candle
+// (o que o seu backtest faz); 0 se ele rodar so no fechamento.
+// =============================================================
+input
+  Deslocamento(1);      // 1 = roda durante o candle | 0 = so no fechamento
+  Alvo(50);
+  Stop(250);
+  PeriodoMedia(8);
+  TipoMedia(1);         // 1 = exponencial | 0 = aritmetica
+  FolgaPontos(20);      // folga do preco limite das ordens stop
+  OperarCompra(true);
+  OperarVenda(false);
+var
+  vMedia, vEntrada, vStop, vAlvo : Float;
+  nBarraPos                      : Integer;
+begin
+  if (TipoMedia = 1) then
+    vMedia := MediaExp(PeriodoMedia, Close)[Deslocamento]
+  else
+    vMedia := Media(PeriodoMedia, Close)[Deslocamento];
+
+  if (IsBought) then
+    begin
+      nBarraPos := CurrentBar;
+      vStop := vEntrada - Stop;
+      vAlvo := vEntrada + Alvo;
+      if (Close <= vStop) then
+        SellToCoverAtMarket
+      else
+        begin
+          SellToCoverLimit(vAlvo);
+          SellToCoverStop(vStop, vStop - FolgaPontos);
+        end;
+    end
+  else if (IsSold) then
+    begin
+      nBarraPos := CurrentBar;
+      vStop := vEntrada + Stop;
+      vAlvo := vEntrada - Alvo;
+      if (Close >= vStop) then
+        BuyToCoverAtMarket
+      else
+        begin
+          BuyToCoverLimit(vAlvo);
+          BuyToCoverStop(vStop, vStop + FolgaPontos);
+        end;
+    end
+  else if (CurrentBar <> nBarraPos) then
+    begin
+      if (OperarCompra) and (Close[Deslocamento] > vMedia) then
+        begin
+          vEntrada := High[Deslocamento];
+          BuyStop(vEntrada, vEntrada + FolgaPontos);
+        end
+      else if (OperarVenda) and (Close[Deslocamento] < vMedia) then
+        begin
+          vEntrada := Low[Deslocamento];
+          SellShortStop(vEntrada, vEntrada - FolgaPontos);
+        end;
+    end;
+end;
