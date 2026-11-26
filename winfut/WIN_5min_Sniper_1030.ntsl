@@ -1,0 +1,79 @@
+// =============================================================
+// WINFUT 5 min - "Sniper das 10:30" (reconstrucao)
+//
+// Parametros iguais aos visiveis no video; a regra de entrada do
+// original esta escondida e foi reconstruida:
+// No candle de HoraEntrada (uma chance por dia):
+//   fechamento acima da media e IFR acima de RSICompra -> compra
+//   fechamento abaixo da media e IFR abaixo de RSIVenda -> venda
+//   caso contrario, nao opera no dia
+// Saida: stop de StopLossPontos, alvo de TakeProfitPontos (a partir
+//   do preco de entrada) ou zeragem a partir de HoraFechamento.
+//
+// No intradiario o Profit roda o codigo no fechamento do candle e a
+// ordem a mercado sai na abertura do candle seguinte; o preco de
+// entrada e a abertura desse candle. Stop e alvo passam a valer no
+// candle seguinte ao da entrada; se o candle da entrada fechar alem
+// deles, a saida e a mercado. Horarios no formato HHMM (10:30 = 1030).
+// =============================================================
+input
+  HoraEntrada(1030);       // candle do sinal
+  HoraFechamento(1730);    // zera a partir deste candle
+  StopLossPontos(800);
+  TakeProfitPontos(1300);
+  PeriodoMedia(21);
+  TipoMedia(1);            // 1 = exponencial | 0 = aritmetica
+  PeriodoRSI(14);
+  RSICompra(52);
+  RSIVenda(48);
+  FolgaPontos(50);         // folga do preco limite da ordem stop
+var
+  vMedia, vRSI, vEntrada, vStop, vAlvo : Float;
+  nBarraSinal, nIdx                    : Integer;
+begin
+  if (TipoMedia = 1) then
+    vMedia := MediaExp(PeriodoMedia, Close)
+  else
+    vMedia := Media(PeriodoMedia, Close);
+  vRSI := RSI(PeriodoRSI, 0);
+
+  // preco de entrada = abertura do candle seguinte ao do sinal
+  if (IsBought) or (IsSold) then
+    begin
+      nIdx     := CurrentBar - nBarraSinal - 1;
+      vEntrada := Open[nIdx];
+    end;
+
+  if (IsBought) then
+    begin
+      vStop := vEntrada - StopLossPontos;
+      vAlvo := vEntrada + TakeProfitPontos;
+      if (Time >= HoraFechamento) or (Close <= vStop) or (Close >= vAlvo) then
+        SellToCoverAtMarket
+      else
+        begin
+          SellToCoverStop(vStop, vStop - FolgaPontos);
+          SellToCoverLimit(vAlvo);
+        end;
+    end
+  else if (IsSold) then
+    begin
+      vStop := vEntrada + StopLossPontos;
+      vAlvo := vEntrada - TakeProfitPontos;
+      if (Time >= HoraFechamento) or (Close >= vStop) or (Close <= vAlvo) then
+        BuyToCoverAtMarket
+      else
+        begin
+          BuyToCoverStop(vStop, vStop + FolgaPontos);
+          BuyToCoverLimit(vAlvo);
+        end;
+    end
+  else if (Time = HoraEntrada) then
+    begin
+      nBarraSinal := CurrentBar;
+      if (Close > vMedia) and (vRSI > RSICompra) then
+        BuyAtMarket
+      else if (Close < vMedia) and (vRSI < RSIVenda) then
+        SellShortAtMarket;
+    end;
+end;
