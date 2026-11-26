@@ -11,12 +11,9 @@
 //   longa; com false ela e cancelada quando o filtro de compra falha.
 // Venda (opcional, desligada por padrao): o espelho.
 // Saida sempre em OCO: alvo de Alvo e stop de Stop pontos a partir
-//   do preco de execucao, ativos desde o candle da entrada. O preco de
-//   execucao e o gatilho (maxima/minima do candle anterior ao da
-//   entrada) ou a abertura do candle da entrada, se ele ja abriu alem
-//   do gatilho. Ele e calculado no candle da entrada e copiado do
-//   candle anterior depois (vEntrada[1]), sem depender de valor
-//   guardado no meio do candle.
+//   do preco da ordem de entrada (o gatilho), guardado quando a ordem
+//   e enviada. Se o preco ja estiver alem do gatilho nesse momento, a
+//   ordem executa no preco atual, e e ele que fica guardado.
 // Horario: entradas so entre HoraInicio e HoraFim; a partir de
 //   HoraFim, posicao aberta e zerada a mercado e o setup desarma.
 //   O candle de referencia precisa ser do mesmo dia.
@@ -25,12 +22,12 @@
 // Nao reentra no mesmo candle em que uma operacao terminou; depois
 //   de cada operacao, o setup so arma de novo pelo filtro.
 //
-// Deslocamento: 1 quando o Profit roda o codigo durante o candle
-// (o que o seu backtest faz); 0 se ele rodar so no fechamento.
+// Deslocamento: 0 no intradiario (o Profit roda o codigo no fechamento
+// de cada candle, e [0] e o candle que acabou de fechar); 1 no diario.
 // Horarios no formato HHMM do candle (9:00 = 900).
 // =============================================================
 input
-  Deslocamento(1);      // 1 = roda durante o candle | 0 = so no fechamento
+  Deslocamento(0);      // 0 = intradiario | 1 = diario
   Alvo(50);
   Stop(250);
   PeriodoCurta(8);
@@ -49,8 +46,7 @@ input
   Sexta(true);
 var
   vCurta, vLonga, vFech, vEntrada, vStop, vAlvo : Float;
-  vGatilho                                      : Float;
-  nBarraPos, nDia, nPos                         : Integer;
+  nBarraPos, nDia                               : Integer;
   bHorarioOk, bFiltroCompra, bFiltroVenda       : Boolean;
   bDiaOk                                        : Boolean;
   bArmadoCompra, bArmadoVenda                   : Boolean;
@@ -94,16 +90,6 @@ begin
 
   if (IsBought) then
     begin
-      // candle da entrada: o anterior terminou sem a compra
-      if (nPos[1] <> 1) then
-        begin
-          vEntrada := High[1];
-          if (Open > vEntrada) then
-            vEntrada := Open;
-        end
-      else
-        vEntrada := vEntrada[1];
-      nPos          := 1;
       nBarraPos     := CurrentBar;
       bArmadoCompra := False;
       vStop := vEntrada - Stop;
@@ -118,16 +104,6 @@ begin
     end
   else if (IsSold) then
     begin
-      // candle da entrada: o anterior terminou sem a venda
-      if (nPos[1] <> -1) then
-        begin
-          vEntrada := Low[1];
-          if (Open < vEntrada) then
-            vEntrada := Open;
-        end
-      else
-        vEntrada := vEntrada[1];
-      nPos         := -1;
       nBarraPos    := CurrentBar;
       bArmadoVenda := False;
       vStop := vEntrada + Stop;
@@ -139,9 +115,7 @@ begin
           BuyToCoverLimit(vAlvo);
           BuyToCoverStop(vStop, vStop + FolgaPontos);
         end;
-    end
-  else
-    nPos := 0;
+    end;
 
   if (not IsBought) and (not IsSold) and (bHorarioOk) and (CurrentBar <> nBarraPos) then
     begin
@@ -169,13 +143,17 @@ begin
 
       if (bArmadoCompra) then
         begin
-          vGatilho := High[Deslocamento];
-          BuyStop(vGatilho, vGatilho + FolgaPontos);
+          vEntrada := High[Deslocamento];
+          BuyStop(vEntrada, vEntrada + FolgaPontos);
+          if (Close > vEntrada) then
+            vEntrada := Close;
         end
       else if (bArmadoVenda) then
         begin
-          vGatilho := Low[Deslocamento];
-          SellShortStop(vGatilho, vGatilho - FolgaPontos);
+          vEntrada := Low[Deslocamento];
+          SellShortStop(vEntrada, vEntrada - FolgaPontos);
+          if (Close < vEntrada) then
+            vEntrada := Close;
         end;
     end;
 end;
