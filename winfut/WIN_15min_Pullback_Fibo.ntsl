@@ -18,12 +18,12 @@
 //   o stop passa a seguir a minima (compra) ou a maxima (venda) de
 //   cada candle fechado. Zera a partir do candle de HoraZerar.
 //
-// Deslocamento: 0 no intradiario (o Profit roda o codigo no fechamento
-// de cada candle, e [0] e o candle que acabou de fechar); 1 no diario.
+// Deslocamento: 1 quando o Profit roda o codigo durante o candle
+// (o que o seu backtest faz); 0 se ele rodar so no fechamento.
 // Horarios no formato HHMM do candle (10:00 = 1000).
 // =============================================================
 input
-  Deslocamento(0);         // 0 = intradiario | 1 = diario
+  Deslocamento(1);         // 1 = roda durante o candle | 0 = so no fechamento
   Alvo(2500);
   Stop(1500);
   Variacao(700);           // distancia minima do fechamento ate a abertura do dia

@@ -15,11 +15,11 @@
 //
 // OBV calculado no proprio codigo: soma o Volume nos candles de alta
 // e subtrai nos de baixa. A media exponencial e calculada sobre ele.
-// Deslocamento: 0 no intradiario (o Profit roda o codigo no fechamento
-// de cada candle, e [0] e o candle que acabou de fechar); 1 no diario.
+// Deslocamento: 1 quando o Profit roda o codigo durante o candle
+// (o que o seu backtest faz); 0 se ele rodar so no fechamento.
 // =============================================================
 input
-  Deslocamento(0);        // 0 = intradiario | 1 = diario
+  Deslocamento(1);        // 1 = roda durante o candle | 0 = so no fechamento
   PeriodoMediaOBV(50);
   CandlesComparacao(5);
   Alvo(50);
