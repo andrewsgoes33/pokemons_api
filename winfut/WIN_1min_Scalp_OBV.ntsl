@@ -1,0 +1,132 @@
+// =============================================================
+// WINFUT 1 min - Scalp a favor da tendencia com OBV (compra e venda)
+//
+// Candle de sinal (o ultimo fechado), entre HoraInicio e HoraFim:
+// Compra: OBV acima da sua media exponencial, OBV subindo (acima do
+//   candle anterior) e fechamento acima do fechamento de
+//   CandlesComparacao candles atras.
+// Venda: OBV abaixo da media, OBV caindo e fechamento abaixo do de
+//   CandlesComparacao candles atras.
+// Entrada: a mercado na abertura do candle seguinte, ou (se
+//   EntradaAMercado = false) limitada no fechamento do candle de sinal.
+// Saida: alvo de Alvo e stop de Stop pontos a partir da entrada.
+// Depois de cada saida, volta a procurar sinal no candle seguinte.
+// Zeragem do fim do dia fica na configuracao do Profit.
+//
+// OBV calculado no proprio codigo: soma o Volume nos candles de alta
+// e subtrai nos de baixa. A media exponencial e calculada sobre ele.
+// Deslocamento: 1 quando o Profit roda o codigo durante o candle
+// (o que o seu backtest faz); 0 se ele rodar so no fechamento.
+// =============================================================
+input
+  Deslocamento(1);        // 1 = roda durante o candle | 0 = so no fechamento
+  PeriodoMediaOBV(50);
+  CandlesComparacao(5);
+  Alvo(50);
+  Stop(300);
+  EntradaAMercado(true);  // true = a mercado | false = limitada no fechamento do sinal
+  Segunda(true);
+  Terca(true);
+  Quarta(true);
+  Quinta(true);
+  Sexta(true);
+  HoraInicio(1000);       // primeiro candle de sinal
+  HoraFim(1500);          // ultimo candle de sinal
+  FolgaPontos(20);        // folga do preco limite da ordem stop
+var
+  vOBV, vOBVMedia, vAlfa, vEntrada : Float;
+  nDia, nBarraPos, nAnt, nComp     : Integer;
+  bDiaOk, bCompra, bVenda          : Boolean;
+begin
+  if (Close > Close[1]) then
+    vOBV := vOBV[1] + Volume
+  else if (Close < Close[1]) then
+    vOBV := vOBV[1] - Volume
+  else
+    vOBV := vOBV[1];
+
+  vAlfa := 2.0 / (PeriodoMediaOBV + 1.0);
+  if (vOBVMedia[1] = 0) then
+    vOBVMedia := vOBV
+  else
+    vOBVMedia := vOBVMedia[1] + vAlfa * (vOBV - vOBVMedia[1]);
+
+  if (CurrentBar > PeriodoMediaOBV + 50) then
+    begin
+      nAnt  := Deslocamento + 1;
+      nComp := Deslocamento + CandlesComparacao;
+
+      nDia := DayOfWeek(Date);
+      bDiaOk := False;
+      if (nDia = 1) and (Segunda) then bDiaOk := True;
+      if (nDia = 2) and (Terca)   then bDiaOk := True;
+      if (nDia = 3) and (Quarta)  then bDiaOk := True;
+      if (nDia = 4) and (Quinta)  then bDiaOk := True;
+      if (nDia = 5) and (Sexta)   then bDiaOk := True;
+
+      bCompra := False;
+      bVenda  := False;
+      if (bDiaOk) and (Time[Deslocamento] >= HoraInicio) and (Time[Deslocamento] <= HoraFim) then
+        begin
+          if (vOBV[Deslocamento] > vOBVMedia[Deslocamento]) and (vOBV[Deslocamento] > vOBV[nAnt])
+             and (Close[Deslocamento] > Close[nComp]) then
+            bCompra := True;
+          if (vOBV[Deslocamento] < vOBVMedia[Deslocamento]) and (vOBV[Deslocamento] < vOBV[nAnt])
+             and (Close[Deslocamento] < Close[nComp]) then
+            bVenda := True;
+        end;
+
+      if (IsBought) then
+        begin
+          nBarraPos := CurrentBar;
+          if (Close <= vEntrada - Stop) or (Close >= vEntrada + Alvo) then
+            SellToCoverAtMarket
+          else
+            begin
+              SellToCoverStop(vEntrada - Stop, vEntrada - Stop - FolgaPontos);
+              SellToCoverLimit(vEntrada + Alvo);
+            end;
+        end
+      else if (IsSold) then
+        begin
+          nBarraPos := CurrentBar;
+          if (Close >= vEntrada + Stop) or (Close <= vEntrada - Alvo) then
+            BuyToCoverAtMarket
+          else
+            begin
+              BuyToCoverStop(vEntrada + Stop, vEntrada + Stop + FolgaPontos);
+              BuyToCoverLimit(vEntrada - Alvo);
+            end;
+        end
+      else if (CurrentBar <> nBarraPos) then
+        begin
+          // nao reentra no mesmo candle em que uma posicao terminou
+          if (bCompra) then
+            begin
+              if (EntradaAMercado) then
+                begin
+                  vEntrada := Close;
+                  BuyAtMarket;
+                end
+              else
+                begin
+                  vEntrada := Close[Deslocamento];
+                  BuyLimit(vEntrada);
+                end;
+            end
+          else if (bVenda) then
+            begin
+              if (EntradaAMercado) then
+                begin
+                  vEntrada := Close;
+                  SellShortAtMarket;
+                end
+              else
+                begin
+                  vEntrada := Close[Deslocamento];
+                  SellShortLimit(vEntrada);
+                end;
+            end;
+        end;
+    end;
+end;

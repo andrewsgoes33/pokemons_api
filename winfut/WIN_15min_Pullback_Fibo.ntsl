@@ -1,0 +1,186 @@
+// =============================================================
+// WINFUT 15 min - Pullback no Fibonacci de 50% do dia (compra e venda)
+//
+// Candle de sinal (o ultimo fechado), entre HoraInicio e HoraFim:
+// Compra: fechamento acima da media curta e da media longa; candle
+//   positivo; minima tocou o 50% entre a minima e a maxima do dia e
+//   o fechamento ficou acima dele; fechamento pelo menos Variacao
+//   pontos acima da abertura do dia.
+// Venda: o espelho (abaixo das medias, candle negativo, maxima tocou
+//   o 50% e fechou abaixo, fechamento Variacao pontos abaixo da
+//   abertura do dia).
+// Entrada: a mercado na abertura do candle seguinte, ou (se
+//   EntrarAMercado = false) stop no rompimento da maxima/minima do
+//   candle de sinal.
+// Saida: stop de Stop e alvo de Alvo pontos. Se um candle fechar com
+//   lucro de PuxarProBreakeven, o stop vai para a entrada com
+//   LucroBreakeven de lucro. Se fechar com lucro de IniciarTrailing,
+//   o stop passa a seguir a minima (compra) ou a maxima (venda) de
+//   cada candle fechado. Zera a partir do candle de HoraZerar.
+//
+// Deslocamento: 1 quando o Profit roda o codigo durante o candle
+// (o que o seu backtest faz); 0 se ele rodar so no fechamento.
+// Horarios no formato HHMM do candle (10:00 = 1000).
+// =============================================================
+input
+  Deslocamento(1);         // 1 = roda durante o candle | 0 = so no fechamento
+  Alvo(2500);
+  Stop(1500);
+  Variacao(700);           // distancia minima do fechamento ate a abertura do dia
+  EntrarAMercado(true);    // true = a mercado | false = rompimento da maxima/minima
+  Segunda(true);
+  Terca(true);
+  Quarta(true);
+  Quinta(true);
+  Sexta(true);
+  IniciarTrailing(1000);   // lucro no fechamento que inicia o stop barra a barra
+  PuxarProBreakeven(300);  // lucro no fechamento que puxa o stop para o breakeven
+  LucroBreakeven(100);     // lucro garantido pelo stop no breakeven
+  HoraInicio(1000);        // primeiro candle de sinal
+  HoraFim(1130);           // ultimo candle de sinal
+  HoraZerar(1715);         // zera a partir deste candle
+  PeriodoCurta(5);
+  PeriodoLonga(200);
+  FolgaPontos(50);         // folga do preco limite das ordens stop
+var
+  vCurta, vLonga, vMaxDia, vMinDia, vAberturaDia, vFibo : Float;
+  vEntrada, vStopAtual, vLucro                           : Float;
+  i, nIdx, nDia, nBarraPos                               : Integer;
+  bMesmoDia, bTrailing, bDiaOk, bCompra, bVenda          : Boolean;
+begin
+  if (CurrentBar > PeriodoLonga + 100) then
+    begin
+      vCurta := Media(PeriodoCurta, Close)[Deslocamento];
+      vLonga := Media(PeriodoLonga, Close)[Deslocamento];
+
+      // maxima, minima e abertura do dia ate o candle de sinal
+      vMaxDia      := High[Deslocamento];
+      vMinDia      := Low[Deslocamento];
+      vAberturaDia := Open[Deslocamento];
+      bMesmoDia    := True;
+      for i := 1 to 80 do
+        begin
+          nIdx := Deslocamento + i;
+          if (bMesmoDia) and (Date[nIdx] = Date[Deslocamento]) then
+            begin
+              if (High[nIdx] > vMaxDia) then vMaxDia := High[nIdx];
+              if (Low[nIdx] < vMinDia) then vMinDia := Low[nIdx];
+              vAberturaDia := Open[nIdx];
+            end
+          else
+            bMesmoDia := False;
+        end;
+      vFibo := (vMaxDia + vMinDia) / 2;
+
+      nDia := DayOfWeek(Date);
+      bDiaOk := False;
+      if (nDia = 1) and (Segunda) then bDiaOk := True;
+      if (nDia = 2) and (Terca)   then bDiaOk := True;
+      if (nDia = 3) and (Quarta)  then bDiaOk := True;
+      if (nDia = 4) and (Quinta)  then bDiaOk := True;
+      if (nDia = 5) and (Sexta)   then bDiaOk := True;
+
+      bCompra := False;
+      bVenda  := False;
+      if (bDiaOk) and (Time[Deslocamento] >= HoraInicio) and (Time[Deslocamento] <= HoraFim) then
+        begin
+          if (Close[Deslocamento] > vCurta) and (Close[Deslocamento] > vLonga)
+             and (Low[Deslocamento] <= vFibo) and (Close[Deslocamento] > vFibo)
+             and (Close[Deslocamento] > Open[Deslocamento])
+             and (Close[Deslocamento] - vAberturaDia >= Variacao) then
+            bCompra := True;
+          if (Close[Deslocamento] < vCurta) and (Close[Deslocamento] < vLonga)
+             and (High[Deslocamento] >= vFibo) and (Close[Deslocamento] < vFibo)
+             and (Close[Deslocamento] < Open[Deslocamento])
+             and (vAberturaDia - Close[Deslocamento] >= Variacao) then
+            bVenda := True;
+        end;
+
+      if (IsBought) then
+        begin
+          nBarraPos := CurrentBar;
+          vLucro := Close[Deslocamento] - vEntrada;
+          if (vLucro >= IniciarTrailing) then
+            bTrailing := True;
+          if (bTrailing) then
+            begin
+              if (Low[Deslocamento] > vStopAtual) then
+                vStopAtual := Low[Deslocamento];
+            end
+          else if (vLucro >= PuxarProBreakeven) then
+            begin
+              if (vEntrada + LucroBreakeven > vStopAtual) then
+                vStopAtual := vEntrada + LucroBreakeven;
+            end;
+
+          if (Time >= HoraZerar) or (Close <= vStopAtual) then
+            SellToCoverAtMarket
+          else
+            begin
+              SellToCoverStop(vStopAtual, vStopAtual - FolgaPontos);
+              SellToCoverLimit(vEntrada + Alvo);
+            end;
+        end
+      else if (IsSold) then
+        begin
+          nBarraPos := CurrentBar;
+          vLucro := vEntrada - Close[Deslocamento];
+          if (vLucro >= IniciarTrailing) then
+            bTrailing := True;
+          if (bTrailing) then
+            begin
+              if (High[Deslocamento] < vStopAtual) then
+                vStopAtual := High[Deslocamento];
+            end
+          else if (vLucro >= PuxarProBreakeven) then
+            begin
+              if (vEntrada - LucroBreakeven < vStopAtual) then
+                vStopAtual := vEntrada - LucroBreakeven;
+            end;
+
+          if (Time >= HoraZerar) or (Close >= vStopAtual) then
+            BuyToCoverAtMarket
+          else
+            begin
+              BuyToCoverStop(vStopAtual, vStopAtual + FolgaPontos);
+              BuyToCoverLimit(vEntrada - Alvo);
+            end;
+        end
+      else if (CurrentBar <> nBarraPos) then
+        begin
+          // nao reentra no mesmo candle em que uma posicao terminou
+          if (bCompra) then
+            begin
+              bTrailing := False;
+              if (EntrarAMercado) then
+                begin
+                  vEntrada   := Close;
+                  vStopAtual := vEntrada - Stop;
+                  BuyAtMarket;
+                end
+              else
+                begin
+                  vEntrada   := High[Deslocamento];
+                  vStopAtual := vEntrada - Stop;
+                  BuyStop(vEntrada, vEntrada + FolgaPontos);
+                end;
+            end
+          else if (bVenda) then
+            begin
+              bTrailing := False;
+              if (EntrarAMercado) then
+                begin
+                  vEntrada   := Close;
+                  vStopAtual := vEntrada + Stop;
+                  SellShortAtMarket;
+                end
+              else
+                begin
+                  vEntrada   := Low[Deslocamento];
+                  vStopAtual := vEntrada + Stop;
+                  SellShortStop(vEntrada, vEntrada - FolgaPontos);
+                end;
+            end;
+        end;
+    end;
+end;
