@@ -1,19 +1,23 @@
 // =============================================================
 // WINFUT 1-2 min - Scalp no rompimento da maxima com media de 8
 //
-// Compra: se o ultimo candle fechou acima da media de PeriodoMedia,
-//   deixa uma compra stop na maxima desse candle. A ordem vale so no
-//   candle seguinte e e refeita a cada candle.
+// Compra: se o ultimo candle fechou acima da media exponencial de
+//   PeriodoMedia, deixa uma compra stop na maxima desse candle. A
+//   ordem vale so no candle seguinte e e refeita a cada candle.
 // Venda (opcional, desligada por padrao): o espelho, com o fechamento
 //   abaixo da media e venda stop na minima do candle.
 // Saida sempre em OCO: alvo de Alvo e stop de Stop pontos a partir
 //   do preco do rompimento. As duas ordens ficam ativas desde o
 //   candle da entrada; quando uma executa, a outra deixa de existir.
+// Horario: novas entradas so entre HoraInicio e HoraFim; a partir de
+//   HoraFim, posicao aberta e zerada a mercado. O candle de referencia
+//   precisa ser do mesmo dia, entao o primeiro candle do pregao nao
+//   usa a maxima do dia anterior.
 // Nao reentra no mesmo candle em que uma operacao terminou.
-// Horarios e zeragem ficam na configuracao do Profit.
 //
 // Deslocamento: 1 quando o Profit roda o codigo durante o candle
 // (o que o seu backtest faz); 0 se ele rodar so no fechamento.
+// Horarios no formato HHMM do candle (9:00 = 900).
 // =============================================================
 input
   Deslocamento(1);      // 1 = roda durante o candle | 0 = so no fechamento
@@ -21,24 +25,31 @@ input
   Stop(250);
   PeriodoMedia(8);
   TipoMedia(1);         // 1 = exponencial | 0 = aritmetica
+  HoraInicio(900);      // primeira entrada a partir deste candle
+  HoraFim(1100);        // sem novas entradas e zeragem a partir deste candle
   FolgaPontos(20);      // folga do preco limite das ordens stop
   OperarCompra(true);
   OperarVenda(false);
 var
   vMedia, vEntrada, vStop, vAlvo : Float;
   nBarraPos                      : Integer;
+  bHorarioOk                     : Boolean;
 begin
   if (TipoMedia = 1) then
     vMedia := MediaExp(PeriodoMedia, Close)[Deslocamento]
   else
     vMedia := Media(PeriodoMedia, Close)[Deslocamento];
 
+  bHorarioOk := False;
+  if (Time >= HoraInicio) and (Time < HoraFim) and (Date[Deslocamento] = Date) then
+    bHorarioOk := True;
+
   if (IsBought) then
     begin
       nBarraPos := CurrentBar;
       vStop := vEntrada - Stop;
       vAlvo := vEntrada + Alvo;
-      if (Close <= vStop) then
+      if (Time >= HoraFim) or (Close <= vStop) then
         SellToCoverAtMarket
       else
         begin
@@ -51,7 +62,7 @@ begin
       nBarraPos := CurrentBar;
       vStop := vEntrada + Stop;
       vAlvo := vEntrada - Alvo;
-      if (Close >= vStop) then
+      if (Time >= HoraFim) or (Close >= vStop) then
         BuyToCoverAtMarket
       else
         begin
@@ -59,7 +70,7 @@ begin
           BuyToCoverStop(vStop, vStop + FolgaPontos);
         end;
     end
-  else if (CurrentBar <> nBarraPos) then
+  else if (bHorarioOk) and (CurrentBar <> nBarraPos) then
     begin
       if (OperarCompra) and (Close[Deslocamento] > vMedia) then
         begin
