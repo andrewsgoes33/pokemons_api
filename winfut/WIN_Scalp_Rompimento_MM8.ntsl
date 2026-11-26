@@ -4,33 +4,28 @@
 // Filtro de compra: fechamento acima da media curta e da longa, e a
 //   curta acima da longa (exponenciais de 8 e 80 por padrao).
 // Compra: quando um candle fecha com o filtro de compra, o setup arma
-//   e deixa uma compra stop na maxima do ultimo candle (um tick acima
-//   se o candle fechou na propria maxima). Enquanto nao romper, a cada
-//   candle novo a ordem desce para a maxima do candle anterior. Com
-//   ManterOrdem = true ela continua descendo mesmo que o fechamento
-//   perca a media curta, enquanto a curta seguir acima da longa; com
-//   false ela e cancelada quando o filtro de compra falha.
+//   e deixa uma compra stop na maxima do ultimo candle. Enquanto nao
+//   romper, a cada candle novo a ordem desce para a maxima do candle
+//   anterior. Com ManterOrdem = true ela continua descendo mesmo que
+//   o fechamento perca a media curta, enquanto a curta seguir acima da
+//   longa; com false ela e cancelada quando o filtro de compra falha.
 // Venda (opcional, desligada por padrao): o espelho.
 // Saida sempre em OCO: alvo de Alvo e stop de Stop pontos a partir
-//   do preco de execucao: o preco da ordem ou a abertura do candle da
-//   entrada, se ele ja abriu alem do gatilho.
+//   do preco do rompimento, ativos desde o candle da entrada.
 // Horario: entradas so entre HoraInicio e HoraFim; a partir de
 //   HoraFim, posicao aberta e zerada a mercado e o setup desarma.
-// Dias da semana: so arma e entra nos dias marcados como true.
+//   O candle de referencia precisa ser do mesmo dia.
+// Dias da semana: so arma e entra nos dias marcados como true; a
+//   saida de uma posicao aberta nao depende do dia.
+// Nao reentra no mesmo candle em que uma operacao terminou; depois
+//   de cada operacao, o setup so arma de novo pelo filtro.
 //
-// O Profit nao leva o valor das variaveis de um candle para o outro:
-// cada candle comeca com elas zeradas. Por isso o estado (setup
-// armado, posicao e preco de entrada) e copiado do candle anterior
-// com [1] no inicio de cada execucao, e o preco de entrada e
-// recalculado no candle da entrada a partir dos dados do candle
-// anterior, que foi o que gerou a ordem.
-//
-// Deslocamento: 0 no intradiario (o Profit roda o codigo no fechamento
-// de cada candle, e [0] e o candle que acabou de fechar); 1 no diario.
+// Deslocamento: 1 quando o Profit roda o codigo durante o candle
+// (o que o seu backtest faz); 0 se ele rodar so no fechamento.
 // Horarios no formato HHMM do candle (9:00 = 900).
 // =============================================================
 input
-  Deslocamento(0);      // 0 = intradiario | 1 = diario
+  Deslocamento(1);      // 1 = roda durante o candle | 0 = so no fechamento
   Alvo(50);
   Stop(250);
   PeriodoCurta(8);
@@ -39,7 +34,6 @@ input
   HoraInicio(900);      // primeira entrada a partir deste candle
   HoraFim(1100);        // sem novas entradas e zeragem a partir deste candle
   ManterOrdem(true);    // true = ordem segue descendo ate romper | false = cancela quando o filtro falha
-  TickMinimo(5);        // tamanho do tick do ativo (WIN = 5 pontos)
   FolgaPontos(20);      // folga do preco limite das ordens stop
   OperarCompra(true);
   OperarVenda(false);
@@ -49,14 +43,12 @@ input
   Quinta(true);
   Sexta(true);
 var
-  vCurta, vLonga, vFech, vEntrada, vStop, vAlvo, vGatilho : Float;
-  nDia, nPos, nArmado                                     : Integer;
-  bHorarioOk, bFiltroCompra, bFiltroVenda, bDiaOk         : Boolean;
+  vCurta, vLonga, vFech, vEntrada, vStop, vAlvo : Float;
+  nBarraPos, nDia                               : Integer;
+  bHorarioOk, bFiltroCompra, bFiltroVenda       : Boolean;
+  bDiaOk                                        : Boolean;
+  bArmadoCompra, bArmadoVenda                   : Boolean;
 begin
-  // estado vindo do candle anterior
-  nArmado  := nArmado[1];   // 1 = compra armada | -1 = venda armada | 0 = nada
-  vEntrada := vEntrada[1];
-
   if (TipoMedia = 1) then
     begin
       vCurta := MediaExp(PeriodoCurta, Close)[Deslocamento];
@@ -89,21 +81,15 @@ begin
     bHorarioOk := True;
 
   if (not bHorarioOk) then
-    nArmado := 0;
+    begin
+      bArmadoCompra := False;
+      bArmadoVenda  := False;
+    end;
 
   if (IsBought) then
     begin
-      // candle da entrada: recalcula o preco da ordem que executou
-      if (nPos[1] <> 1) then
-        begin
-          vEntrada := High[1];
-          if (Close[1] >= High[1]) then
-            vEntrada := High[1] + TickMinimo;
-          if (Open > vEntrada) then
-            vEntrada := Open;
-        end;
-      nPos    := 1;
-      nArmado := 0;
+      nBarraPos     := CurrentBar;
+      bArmadoCompra := False;
       vStop := vEntrada - Stop;
       vAlvo := vEntrada + Alvo;
       if (Time >= HoraFim) or (Close <= vStop) then
@@ -116,16 +102,8 @@ begin
     end
   else if (IsSold) then
     begin
-      if (nPos[1] <> -1) then
-        begin
-          vEntrada := Low[1];
-          if (Close[1] <= Low[1]) then
-            vEntrada := Low[1] - TickMinimo;
-          if (Open < vEntrada) then
-            vEntrada := Open;
-        end;
-      nPos    := -1;
-      nArmado := 0;
+      nBarraPos    := CurrentBar;
+      bArmadoVenda := False;
       vStop := vEntrada + Stop;
       vAlvo := vEntrada - Alvo;
       if (Time >= HoraFim) or (Close >= vStop) then
@@ -136,37 +114,39 @@ begin
           BuyToCoverStop(vStop, vStop + FolgaPontos);
         end;
     end
-  else
+  else if (bHorarioOk) and (CurrentBar <> nBarraPos) then
     begin
-      nPos := 0;
-      if (bHorarioOk) then
+      if (bFiltroCompra) and (OperarCompra) then
         begin
-          if (bFiltroCompra) and (OperarCompra) then
-            nArmado := 1
-          else if (bFiltroVenda) and (OperarVenda) then
-            nArmado := -1;
+          bArmadoCompra := True;
+          bArmadoVenda  := False;
+        end
+      else if (bFiltroVenda) and (OperarVenda) then
+        begin
+          bArmadoVenda  := True;
+          bArmadoCompra := False;
+        end;
 
-          // desarma quando a tendencia das medias vira ou, sem ManterOrdem,
-          // quando o filtro do lado armado falha
-          if (nArmado = 1) and ((vCurta <= vLonga) or ((not ManterOrdem) and (not bFiltroCompra))) then
-            nArmado := 0;
-          if (nArmado = -1) and ((vCurta >= vLonga) or ((not ManterOrdem) and (not bFiltroVenda))) then
-            nArmado := 0;
+      // desarma quando a tendencia das medias vira ou, sem ManterOrdem,
+      // quando o filtro do lado armado falha
+      if (vCurta <= vLonga) then
+        bArmadoCompra := False;
+      if (vCurta >= vLonga) then
+        bArmadoVenda := False;
+      if (not ManterOrdem) and (not bFiltroCompra) then
+        bArmadoCompra := False;
+      if (not ManterOrdem) and (not bFiltroVenda) then
+        bArmadoVenda := False;
 
-          if (nArmado = 1) then
-            begin
-              vGatilho := High[Deslocamento];
-              if (Close[Deslocamento] >= High[Deslocamento]) then
-                vGatilho := vGatilho + TickMinimo;
-              BuyStop(vGatilho, vGatilho + FolgaPontos);
-            end
-          else if (nArmado = -1) then
-            begin
-              vGatilho := Low[Deslocamento];
-              if (Close[Deslocamento] <= Low[Deslocamento]) then
-                vGatilho := vGatilho - TickMinimo;
-              SellShortStop(vGatilho, vGatilho - FolgaPontos);
-            end;
+      if (bArmadoCompra) then
+        begin
+          vEntrada := High[Deslocamento];
+          BuyStop(vEntrada, vEntrada + FolgaPontos);
+        end
+      else if (bArmadoVenda) then
+        begin
+          vEntrada := Low[Deslocamento];
+          SellShortStop(vEntrada, vEntrada - FolgaPontos);
         end;
     end;
 end;
