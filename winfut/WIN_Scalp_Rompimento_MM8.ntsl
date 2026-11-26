@@ -15,6 +15,8 @@
 // Horario: entradas so entre HoraInicio e HoraFim; a partir de
 //   HoraFim, posicao aberta e zerada a mercado e o setup desarma.
 //   O candle de referencia precisa ser do mesmo dia.
+// Dias da semana: so arma e entra nos dias marcados como true; a
+//   saida de uma posicao aberta nao depende do dia.
 // Nao reentra no mesmo candle em que uma operacao terminou; depois
 //   de cada operacao, o setup so arma de novo pelo filtro.
 //
@@ -35,10 +37,16 @@ input
   FolgaPontos(20);      // folga do preco limite das ordens stop
   OperarCompra(true);
   OperarVenda(false);
+  Segunda(true);
+  Terca(true);
+  Quarta(true);
+  Quinta(true);
+  Sexta(true);
 var
   vCurta, vLonga, vFech, vEntrada, vStop, vAlvo : Float;
-  nBarraPos                                     : Integer;
+  nBarraPos, nDia                               : Integer;
   bHorarioOk, bFiltroCompra, bFiltroVenda       : Boolean;
+  bDiaOk                                        : Boolean;
   bArmadoCompra, bArmadoVenda                   : Boolean;
 begin
   if (TipoMedia = 1) then
@@ -60,8 +68,16 @@ begin
   if (vFech < vCurta) and (vFech < vLonga) and (vCurta < vLonga) then
     bFiltroVenda := True;
 
+  nDia := DayOfWeek(Date);
+  bDiaOk := False;
+  if (nDia = 1) and (Segunda) then bDiaOk := True;
+  if (nDia = 2) and (Terca)   then bDiaOk := True;
+  if (nDia = 3) and (Quarta)  then bDiaOk := True;
+  if (nDia = 4) and (Quinta)  then bDiaOk := True;
+  if (nDia = 5) and (Sexta)   then bDiaOk := True;
+
   bHorarioOk := False;
-  if (Time >= HoraInicio) and (Time < HoraFim) and (Date[Deslocamento] = Date) then
+  if (bDiaOk) and (Time >= HoraInicio) and (Time < HoraFim) and (Date[Deslocamento] = Date) then
     bHorarioOk := True;
 
   if (not bHorarioOk) then
