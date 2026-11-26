@@ -1,23 +1,22 @@
 // =============================================================
-// WINFUT 1-2 min - Scalp no rompimento da maxima com media de 8
+// WINFUT 1-2 min - Scalp no rompimento da maxima com filtro de 2 medias
 //
-// Compra: quando um candle fecha acima da media exponencial de
-//   PeriodoMedia, o setup arma e deixa uma compra stop na maxima do
-//   ultimo candle. Enquanto nao romper, a cada candle novo a ordem
-//   desce para a maxima do candle anterior. Com ManterOrdem = true a
-//   ordem continua descendo mesmo que os candles fechem abaixo da
-//   media; com false ela e cancelada quando o fechamento perde a media.
-// Venda (opcional, desligada por padrao): o espelho, com a venda stop
-//   subindo para a minima do candle anterior.
-// Com compra e venda ligadas, o lado acompanha a media: fechou acima
-//   arma a compra, fechou abaixo arma a venda.
+// Filtro de compra: fechamento acima da media curta e da longa, e a
+//   curta acima da longa (exponenciais de 8 e 80 por padrao).
+// Compra: quando um candle fecha com o filtro de compra, o setup arma
+//   e deixa uma compra stop na maxima do ultimo candle. Enquanto nao
+//   romper, a cada candle novo a ordem desce para a maxima do candle
+//   anterior. Com ManterOrdem = true ela continua descendo mesmo que
+//   o fechamento perca a media curta, enquanto a curta seguir acima da
+//   longa; com false ela e cancelada quando o filtro de compra falha.
+// Venda (opcional, desligada por padrao): o espelho.
 // Saida sempre em OCO: alvo de Alvo e stop de Stop pontos a partir
 //   do preco do rompimento, ativos desde o candle da entrada.
 // Horario: entradas so entre HoraInicio e HoraFim; a partir de
 //   HoraFim, posicao aberta e zerada a mercado e o setup desarma.
 //   O candle de referencia precisa ser do mesmo dia.
 // Nao reentra no mesmo candle em que uma operacao terminou; depois
-//   de cada operacao, o setup so arma de novo pela media.
+//   de cada operacao, o setup so arma de novo pelo filtro.
 //
 // Deslocamento: 1 quando o Profit roda o codigo durante o candle
 // (o que o seu backtest faz); 0 se ele rodar so no fechamento.
@@ -27,24 +26,39 @@ input
   Deslocamento(1);      // 1 = roda durante o candle | 0 = so no fechamento
   Alvo(50);
   Stop(250);
-  PeriodoMedia(8);
-  TipoMedia(1);         // 1 = exponencial | 0 = aritmetica
+  PeriodoCurta(8);
+  PeriodoLonga(80);
+  TipoMedia(1);         // 1 = exponencial | 0 = aritmetica (vale para as 2)
   HoraInicio(900);      // primeira entrada a partir deste candle
   HoraFim(1100);        // sem novas entradas e zeragem a partir deste candle
-  ManterOrdem(true);    // true = ordem segue descendo ate romper | false = cancela ao perder a media
+  ManterOrdem(true);    // true = ordem segue descendo ate romper | false = cancela quando o filtro falha
   FolgaPontos(20);      // folga do preco limite das ordens stop
   OperarCompra(true);
   OperarVenda(false);
 var
-  vMedia, vEntrada, vStop, vAlvo : Float;
-  nBarraPos                      : Integer;
-  bHorarioOk                     : Boolean;
-  bArmadoCompra, bArmadoVenda    : Boolean;
+  vCurta, vLonga, vFech, vEntrada, vStop, vAlvo : Float;
+  nBarraPos                                     : Integer;
+  bHorarioOk, bFiltroCompra, bFiltroVenda       : Boolean;
+  bArmadoCompra, bArmadoVenda                   : Boolean;
 begin
   if (TipoMedia = 1) then
-    vMedia := MediaExp(PeriodoMedia, Close)[Deslocamento]
+    begin
+      vCurta := MediaExp(PeriodoCurta, Close)[Deslocamento];
+      vLonga := MediaExp(PeriodoLonga, Close)[Deslocamento];
+    end
   else
-    vMedia := Media(PeriodoMedia, Close)[Deslocamento];
+    begin
+      vCurta := Media(PeriodoCurta, Close)[Deslocamento];
+      vLonga := Media(PeriodoLonga, Close)[Deslocamento];
+    end;
+  vFech := Close[Deslocamento];
+
+  bFiltroCompra := False;
+  if (vFech > vCurta) and (vFech > vLonga) and (vCurta > vLonga) then
+    bFiltroCompra := True;
+  bFiltroVenda := False;
+  if (vFech < vCurta) and (vFech < vLonga) and (vCurta < vLonga) then
+    bFiltroVenda := True;
 
   bHorarioOk := False;
   if (Time >= HoraInicio) and (Time < HoraFim) and (Date[Deslocamento] = Date) then
@@ -86,20 +100,27 @@ begin
     end
   else if (bHorarioOk) and (CurrentBar <> nBarraPos) then
     begin
-      if (Close[Deslocamento] > vMedia) then
+      if (bFiltroCompra) and (OperarCompra) then
         begin
-          if (OperarCompra) then
-            bArmadoCompra := True;
-          if (OperarCompra) or (not ManterOrdem) then
-            bArmadoVenda := False;
+          bArmadoCompra := True;
+          bArmadoVenda  := False;
         end
-      else if (Close[Deslocamento] < vMedia) then
+      else if (bFiltroVenda) and (OperarVenda) then
         begin
-          if (OperarVenda) then
-            bArmadoVenda := True;
-          if (OperarVenda) or (not ManterOrdem) then
-            bArmadoCompra := False;
+          bArmadoVenda  := True;
+          bArmadoCompra := False;
         end;
+
+      // desarma quando a tendencia das medias vira ou, sem ManterOrdem,
+      // quando o filtro do lado armado falha
+      if (vCurta <= vLonga) then
+        bArmadoCompra := False;
+      if (vCurta >= vLonga) then
+        bArmadoVenda := False;
+      if (not ManterOrdem) and (not bFiltroCompra) then
+        bArmadoCompra := False;
+      if (not ManterOrdem) and (not bFiltroVenda) then
+        bArmadoVenda := False;
 
       if (bArmadoCompra) then
         begin
