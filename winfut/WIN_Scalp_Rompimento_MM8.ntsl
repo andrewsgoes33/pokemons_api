@@ -4,6 +4,7 @@
 // Filtro de compra: fechamento acima da media curta e da longa, a
 //   curta acima da longa e, com UsarTerceira = true, fechamento acima
 //   da terceira media. Venda: o espelho.
+//   Padrao: medias aritmeticas de 9 e 20, alvo 45, stop 250.
 // Compra stop na maxima do ultimo candle; enquanto nao romper, a
 //   ordem desce candle a candle (ManterOrdem). Saida em OCO de Alvo e
 //   Stop pontos a partir do preco medio real da posicao (BuyPrice /
@@ -14,19 +15,19 @@
 // =============================================================
 input
   Deslocamento(0);      // 0 = intradiario | 1 = diario
-  Alvo(50);
+  Alvo(45);
   Stop(250);
-  PeriodoCurta(8);
-  PeriodoLonga(80);
-  UsarTerceira(true);   // true = liga o filtro da terceira media
+  PeriodoCurta(9);
+  PeriodoLonga(20);
+  UsarTerceira(false);  // true = liga o filtro da terceira media
   PeriodoTerceira(200); // periodo da terceira media
-  TipoMedia(1);         // 1 = exponencial | 0 = aritmetica (vale para as 3)
+  TipoMedia(0);         // 1 = exponencial | 0 = aritmetica (vale para as 3)
   HoraInicio(900);      // primeira entrada a partir deste candle
-  HoraFim(1100);        // sem novas entradas e zeragem a partir deste candle
+  HoraFim(1105);        // sem novas entradas e zeragem a partir deste candle
   ManterOrdem(true);    // true = ordem segue descendo ate romper | false = cancela quando o filtro falha
-  FolgaPontos(20);      // folga do preco limite das ordens stop
+  FolgaPontos(0);       // folga do preco limite das ordens stop
   OperarCompra(true);
-  OperarVenda(false);
+  OperarVenda(true);
   Segunda(true);
   Terca(true);
   Quarta(true);
