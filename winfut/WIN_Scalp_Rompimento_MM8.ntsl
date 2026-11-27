@@ -6,8 +6,11 @@
 //   da terceira media. Venda: o espelho.
 // Compra stop na maxima do ultimo candle; enquanto nao romper, a
 //   ordem desce candle a candle (ManterOrdem). Saida em OCO de Alvo e
-//   Stop pontos. Janela de HoraInicio a HoraFim, com zeragem em
+//   Stop pontos a partir do preco medio real da posicao (BuyPrice /
+//   SellPrice). Janela de HoraInicio a HoraFim, com zeragem em
 //   HoraFim, e filtro de dias da semana.
+// Na automacao, uma estrategia OCO escolhida na aba Saida substitui
+//   as saidas deste codigo.
 // =============================================================
 input
   Deslocamento(0);      // 0 = intradiario | 1 = diario
@@ -31,6 +34,7 @@ input
   Sexta(true);
 var
   vCurta, vLonga, vTerceira, vFech, vEntrada, vStop, vAlvo : Float;
+  vGatilho                                                 : Float;
   nBarraPos, nDia                                          : Integer;
   bHorarioOk, bFiltroCompra, bFiltroVenda                  : Boolean;
   bDiaOk                                                   : Boolean;
@@ -85,6 +89,7 @@ begin
     begin
       nBarraPos     := CurrentBar;
       bArmadoCompra := False;
+      vEntrada := BuyPrice;
       vStop := vEntrada - Stop;
       vAlvo := vEntrada + Alvo;
       if (Time >= HoraFim) or (Close <= vStop) then
@@ -99,6 +104,7 @@ begin
     begin
       nBarraPos    := CurrentBar;
       bArmadoVenda := False;
+      vEntrada := SellPrice;
       vStop := vEntrada + Stop;
       vAlvo := vEntrada - Alvo;
       if (Time >= HoraFim) or (Close >= vStop) then
@@ -136,17 +142,13 @@ begin
 
       if (bArmadoCompra) then
         begin
-          vEntrada := High[Deslocamento];
-          BuyStop(vEntrada, vEntrada + FolgaPontos);
-          if (Close > vEntrada) then
-            vEntrada := Close;
+          vGatilho := High[Deslocamento];
+          BuyStop(vGatilho, vGatilho + FolgaPontos);
         end
       else if (bArmadoVenda) then
         begin
-          vEntrada := Low[Deslocamento];
-          SellShortStop(vEntrada, vEntrada - FolgaPontos);
-          if (Close < vEntrada) then
-            vEntrada := Close;
+          vGatilho := Low[Deslocamento];
+          SellShortStop(vGatilho, vGatilho - FolgaPontos);
         end;
     end;
 end;
