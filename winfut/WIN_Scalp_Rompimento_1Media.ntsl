@@ -1,0 +1,113 @@
+// =============================================================
+// WINFUT 1-2 min - Scalp no rompimento com 1 media + cor do candle
+//
+// A cada candle fechado:
+//   Compra: fechamento acima da media e, com UsarCorCandle = true,
+//     candle de alta (fechamento acima da abertura) -> compra stop na
+//     maxima desse candle.
+//   Venda: fechamento abaixo da media e, com UsarCorCandle = true,
+//     candle de baixa -> venda stop na minima desse candle.
+//   A ordem vale so no candle seguinte; a decisao e refeita a cada
+//   candle (a ordem acompanha a maxima/minima do ultimo candle).
+// Saida em OCO de Alvo e Stop pontos a partir do preco medio real da
+//   posicao (BuyPrice / SellPrice). Na automacao, uma estrategia OCO
+//   escolhida na aba Saida substitui estas saidas.
+// Janela de HoraInicio a HoraFim, com zeragem em HoraFim, e filtro de
+//   dias da semana.
+// Deslocamento: 0 no intradiario | 1 no diario.
+// =============================================================
+input
+  Deslocamento(0);      // 0 = intradiario | 1 = diario
+  Alvo(45);
+  Stop(250);
+  PeriodoMedia(20);
+  TipoMedia(0);         // 1 = exponencial | 0 = aritmetica
+  UsarCorCandle(true);  // true = exige candle de alta para comprar e de baixa para vender
+  HoraInicio(900);      // primeira entrada a partir deste candle
+  HoraFim(1105);        // sem novas entradas e zeragem a partir deste candle
+  FolgaPontos(0);       // folga do preco limite das ordens stop
+  OperarCompra(true);
+  OperarVenda(true);
+  Segunda(true);
+  Terca(true);
+  Quarta(true);
+  Quinta(true);
+  Sexta(true);
+var
+  vMedia, vFech, vEntrada, vStop, vAlvo, vGatilho : Float;
+  nBarraPos, nDia                                 : Integer;
+  bHorarioOk, bDiaOk, bCompra, bVenda             : Boolean;
+begin
+  if (TipoMedia = 1) then
+    vMedia := MediaExp(PeriodoMedia, Close)[Deslocamento]
+  else
+    vMedia := Media(PeriodoMedia, Close)[Deslocamento];
+  vFech := Close[Deslocamento];
+
+  bCompra := False;
+  if (vFech > vMedia) then
+    bCompra := True;
+  if (UsarCorCandle) and (vFech <= Open[Deslocamento]) then
+    bCompra := False;
+
+  bVenda := False;
+  if (vFech < vMedia) then
+    bVenda := True;
+  if (UsarCorCandle) and (vFech >= Open[Deslocamento]) then
+    bVenda := False;
+
+  nDia := DayOfWeek(Date);
+  bDiaOk := False;
+  if (nDia = 1) and (Segunda) then bDiaOk := True;
+  if (nDia = 2) and (Terca)   then bDiaOk := True;
+  if (nDia = 3) and (Quarta)  then bDiaOk := True;
+  if (nDia = 4) and (Quinta)  then bDiaOk := True;
+  if (nDia = 5) and (Sexta)   then bDiaOk := True;
+
+  bHorarioOk := False;
+  if (bDiaOk) and (Time >= HoraInicio) and (Time < HoraFim) and (Date[Deslocamento] = Date) then
+    bHorarioOk := True;
+
+  if (IsBought) then
+    begin
+      nBarraPos := CurrentBar;
+      vEntrada  := BuyPrice;
+      vStop := vEntrada - Stop;
+      vAlvo := vEntrada + Alvo;
+      if (Time >= HoraFim) or (Close <= vStop) then
+        SellToCoverAtMarket
+      else
+        begin
+          SellToCoverLimit(vAlvo);
+          SellToCoverStop(vStop, vStop - FolgaPontos);
+        end;
+    end
+  else if (IsSold) then
+    begin
+      nBarraPos := CurrentBar;
+      vEntrada  := SellPrice;
+      vStop := vEntrada + Stop;
+      vAlvo := vEntrada - Alvo;
+      if (Time >= HoraFim) or (Close >= vStop) then
+        BuyToCoverAtMarket
+      else
+        begin
+          BuyToCoverLimit(vAlvo);
+          BuyToCoverStop(vStop, vStop + FolgaPontos);
+        end;
+    end;
+
+  if (not IsBought) and (not IsSold) and (bHorarioOk) and (CurrentBar <> nBarraPos) then
+    begin
+      if (bCompra) and (OperarCompra) then
+        begin
+          vGatilho := High[Deslocamento];
+          BuyStop(vGatilho, vGatilho + FolgaPontos);
+        end
+      else if (bVenda) and (OperarVenda) then
+        begin
+          vGatilho := Low[Deslocamento];
+          SellShortStop(vGatilho, vGatilho - FolgaPontos);
+        end;
+    end;
+end;
